@@ -26,3 +26,7 @@ jackin load the-architect
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
 
 Shared shell/runtime tools come from `jackin-construct:trixie`.
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
