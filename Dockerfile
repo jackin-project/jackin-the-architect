@@ -1,4 +1,4 @@
-FROM donbeave/jackin-construct:trixie
+FROM projectjackin/construct:trixie
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

@@ -14,7 +14,7 @@ jackin load the-architect
 
 ## Contract
 
-- Final Dockerfile stage must literally be `FROM donbeave/jackin-construct:trixie`
+- Final Dockerfile stage must literally be `FROM projectjackin/construct:trixie`
 - Plugins are declared in `jackin.agent.toml`
 
 ## Environment
@@ -25,7 +25,7 @@ jackin load the-architect
 - **Node.js** LTS (via mise)
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
 
-Shared shell/runtime tools come from `jackin-construct:trixie`.
+Shared shell/runtime tools come from `projectjackin/construct:trixie`.
 
 ## License
 
