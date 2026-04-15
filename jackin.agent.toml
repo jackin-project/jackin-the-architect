@@ -25,4 +25,8 @@ plugins = [
   "hookify@claude-plugins-official",
   "learning-output-style@claude-plugins-official",
   "rust-analyzer-lsp@claude-plugins-official",
+  "jackin-dev@jackin-marketplace",
 ]
+
+[[claude.marketplaces]]
+source = "jackin-project/jackin-marketplace"
