@@ -3,6 +3,9 @@ dockerfile = "Dockerfile"
 [identity]
 name = "The Architect"
 
+[env.CLAUDE_CODE_NO_FLICKER]
+default = "1"
+
 [claude]
 plugins = [
   "superpowers@claude-plugins-official",
