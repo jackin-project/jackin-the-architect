@@ -31,3 +31,7 @@ RUN . ~/.profile && \
 # Node.js for tooling
 RUN mise install node@lts && \
     mise use -g --pin node@lts
+
+# OpenTofu for GitHub org management
+RUN mise install opentofu@1.11.6 && \
+    mise use -g --pin opentofu@1.11.6
