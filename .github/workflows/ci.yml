@@ -17,3 +17,4 @@ jobs:
       - uses: jackin-project/validate-agent-action@99c0ab5ceca22222897b665db47eac2de3c65f6d # v1
         with:
           skip-build: true
+          jackin-version: latest-build
