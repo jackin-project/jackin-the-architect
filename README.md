@@ -2,8 +2,6 @@
 
 `the-architect` is the jackin agent for developing [jackin](https://github.com/donbeave/jackin) itself.
 
-> "I am the Architect. I created the Matrix."
-
 It provides the Rust development environment needed to build and test the jackin CLI.
 
 ## Usage

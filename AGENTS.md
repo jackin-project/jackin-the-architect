@@ -1,6 +1,6 @@
 # AGENTS.md — jackin-the-architect
 
-A privileged Claude Code agent image. Extends `projectjackin/construct:trixie` and layers Rust, Node.js, OpenTofu, and ~18 Claude Code plugins including `superpowers`, `plugin-dev`, and `hookify`. Named "The Architect" because it has the broadest operator capability of any agent in this org.
+A privileged Claude Code agent image. Extends `projectjackin/construct:trixie` and layers Rust, Node.js, OpenTofu, and ~18 Claude Code plugins including `superpowers`, `plugin-dev`, and `hookify`. Named `the-architect` because it has the broadest operator capability of the agent images — it can manage the entire `jackin-project` repo collection.
 
 **Image distribution is public.** Because of the plugin count and the presence of OpenTofu (which can manage org-write credentials at runtime), this image has a larger blast radius than the sibling `jackin-agent-smith`. Treat it with proportionally more care.
 
@@ -51,9 +51,37 @@ The third check is advisory (prints a note, doesn't exit non-zero) — a non-def
 ## Conventions
 
 - Branch naming: `chore/*`, `feat/*`, `fix/*`
-- Commit messages follow Conventional Commits
+- Commit messages: see [Commit Messages](#commit-messages) section below
 - `main` is the primary branch
 - All changes go through PR
+
+## Commit Messages
+
+All commits in this repository MUST follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
+
+Subject format: `<type>[optional scope][!]: <description>`
+
+Allowed types:
+
+| Type       | Use for                                                |
+| ---------- | ------------------------------------------------------ |
+| `feat`     | New user-visible feature                               |
+| `fix`      | Bug fix                                                |
+| `docs`     | Documentation-only change                              |
+| `style`    | Formatting, whitespace; no logic change                |
+| `refactor` | Internal restructuring; no behavior change             |
+| `perf`     | Performance improvement                                |
+| `test`     | Adding or updating tests                               |
+| `build`    | Build system, tooling, dependencies                    |
+| `ci`       | CI configuration                                       |
+| `chore`    | Routine maintenance (release, merge, deps)             |
+| `revert`   | Reverts a prior commit                                 |
+
+Scope is optional but encouraged when it clarifies the change area.
+
+Breaking changes use `!` after the type/scope (`feat!:` or `feat(api)!:`) and include a `BREAKING CHANGE:` footer in the body.
+
+PR squash-merge: the PR title becomes the commit subject, so PR titles must also follow this convention.
 
 ## What this does NOT protect against
 
