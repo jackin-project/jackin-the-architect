@@ -19,9 +19,13 @@ USER claude
 
 ENV MISE_TRUSTED_CONFIG_PATHS=/workspace
 
-# Rust toolchain
-RUN mise install rust@latest && \
-    mise use -g --pin rust@latest
+# Rust toolchain.
+# Keep in sync with the `rust:<version>-trixie` pin in the construct base
+# image (jackin/docker/construct/Dockerfile) and with `rust-toolchain.toml`
+# in the jackin/ repo, so all three layers agree on the toolchain that
+# operators get at runtime.
+RUN mise install rust@1.95.0 && \
+    mise use -g --pin rust@1.95.0
 
 # Rust dev tools
 RUN . ~/.profile && \
