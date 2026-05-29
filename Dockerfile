@@ -6,7 +6,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # https://github.com/JuliusBrussee/caveman/releases — never `main`,
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
-ARG RUST_VERSION=1.95.0
+ARG RUST_VERSION=1.96.0
 ARG CARGO_BINSTALL_VERSION=1.19.1
 ARG NODE_VERSION=24.15.0
 ARG BUN_VERSION=1.3.14
