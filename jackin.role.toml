@@ -46,3 +46,6 @@ preflight = "hooks/preflight.sh"
 
 [env.CLAUDE_CODE_NO_FLICKER]
 default = "1"
+
+[env.CLAUDE_CODE_MAX_OUTPUT_TOKENS]
+default = "64000"
