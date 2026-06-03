@@ -49,3 +49,6 @@ default = "1"
 
 [env.CLAUDE_CODE_MAX_OUTPUT_TOKENS]
 default = "64000"
+
+[env.CLAUDE_CODE_DISABLE_WORKFLOWS]
+default = "1"
