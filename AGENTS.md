@@ -11,8 +11,9 @@ Threat surface for this image:
 1. **Plugin breadth.** Each plugin in `jackin.role.toml` has its own update cadence; a compromised plugin runs with the agent's full capability. `caveman` (source [`JuliusBrussee/caveman`](https://github.com/JuliusBrussee/caveman), pinned in the Dockerfile via `CAVEMAN_VERSION` to a tagged release — never `main` and never a raw SHA) is one of the trust anchors outside `@claude-plugins-official` / `@jackin-marketplace`, alongside `rust-best-practices@tailrocks-marketplace`. Trust is anchored in operator vetting of the maintainer, not in source audit.
 2. **OpenTofu credential adjacency.** An operator running this image against `jackin-github-terraform` exports `GITHUB_TOKEN` with org-admin scope into the shell. Anything the agent does (any plugin, any skill) can see that token via `/proc/*/environ`.
 3. **Rust `cargo install`.** `cargo install --locked cargo-nextest cargo-watch lychee` pulls from crates.io at build time. Lock files pin transitive deps, but root crates are unpinned — a malicious version of one of these tools on crates.io lands in a future image rebuild.
-4. **Multi-ecosystem supply chain.** Each ecosystem (mise's plugin registry plus the per-runtime upstreams it fetches from for Rust, Node, Bun, Just, OpenTofu; crates.io via `cargo install`; the pinned caveman GitHub ref) brings its own trust root.
-5. **Base image supply chain.** `FROM projectjackin/construct:trixie` — whoever can push to `projectjackin/construct` serves the base. The `trixie` tag is mutable; pinning by digest would harden this but breaks the monthly base-image refresh flow.
+4. **Multi-ecosystem supply chain.** Each ecosystem (mise's plugin registry plus the per-runtime upstreams it fetches from for Rust, Node, Bun, Just, OpenTofu; crates.io via `cargo install`; npm via `npm install -g ctx7`; the pinned caveman GitHub ref) brings its own trust root.
+5. **Context7 MCP.** Optional `CONTEXT7_API_KEY` configures a third-party MCP server with read access to the agent's docs corpus. Treat the key like any other credential — do not commit, do not bake into the image.
+6. **Base image supply chain.** `FROM projectjackin/construct:trixie` — whoever can push to `projectjackin/construct` serves the base. The `trixie` tag is mutable; pinning by digest would harden this but breaks the monthly base-image refresh flow.
 
 ## Hard rules (do not break these)
 
@@ -82,3 +83,4 @@ PR squash-merge: the PR title becomes the commit subject, so PR titles must also
 - A compromised plugin that runs during agent startup before a hook check fires.
 - OpenTofu credential leakage through a plugin that reads `/proc/*/environ` — runtime isolation isn't in scope here; anchor trust in the plugin set.
 - crates.io / npm / mise registry takeover on a future rebuild — pinned versions and `--locked` mitigate transitive-dep risk but not top-level package-name takeover.
+- Context7 corpus poisoning — the MCP server returns content the agent treats as documentation; treat its output as untrusted input.

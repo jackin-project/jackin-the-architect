@@ -20,13 +20,14 @@ In a Codex session, caveman is delivered through Codex skills under `~/.agents/s
 
 ## Environment
 
-Versions pinned in `Dockerfile` ARGs (`RUST_VERSION`, `NODE_VERSION`, `BUN_VERSION`, `JUST_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+Versions pinned in `Dockerfile` ARGs (`RUST_VERSION`, `NODE_VERSION`, `BUN_VERSION`, `JUST_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
 
 - **Rust** (via mise) with clippy, rustfmt, rust-analyzer, cargo-nextest, cargo-watch, lychee
 - **Node.js** (via mise)
 - **Bun** (via mise) for jackin docs development
 - **Just** (via mise) for jackin task recipes
 - **OpenTofu** (via mise)
+- **Context7** (npm) — up-to-date library docs via MCP
 - **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
 
@@ -44,10 +45,11 @@ Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
 ## Pre-launch hooks
 
-The `hooks/pre-launch.sh` script runs before the agent CLI starts:
+The `hooks/preflight.sh` script runs before the agent CLI starts:
 
-1. **caveman-shrink MCP** — registers caveman-shrink as a Claude MCP middleware (claude agent only, idempotent; fails launch if the claude CLI is missing — see hook header for the contract)
-2. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
+1. **Context7 MCP** — configures the MCP server if `CONTEXT7_API_KEY` is provided (prompted at launch, skippable)
+2. **caveman-shrink MCP** — registers caveman-shrink as a Claude MCP middleware (claude agent only, idempotent; fails launch if the claude CLI is missing — see hook header for the contract)
+3. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
 
 ## PR workflow
 

@@ -10,6 +10,14 @@ log()  { printf '[architect-pre-launch] %s\n' "$*"; }
 warn() { printf '[architect-pre-launch] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
 
+if [ -n "${CONTEXT7_API_KEY:-}" ]; then
+    log "configuring Context7 MCP server"
+    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup --claude --mcp -y; then
+        err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
+        exit 1
+    fi
+fi
+
 # caveman-shrink wraps another MCP server's stdio and compresses the
 # responses to cut token cost. The registration here is a placeholder
 # — wire it to a real upstream by editing the `mcpServers` entry to
