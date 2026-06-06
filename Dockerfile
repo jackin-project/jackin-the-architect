@@ -13,6 +13,7 @@ ARG BUN_VERSION=1.3.14
 ARG JUST_VERSION=1.51.0
 ARG OPENTOFU_VERSION=1.12.1
 ARG CAVEMAN_VERSION=1.8.2
+ARG CTX7_VERSION=0.4.4
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -71,6 +72,10 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "opentofu@${OPENTOFU_VERSION}" && \
     mise use -g --pin "opentofu@${OPENTOFU_VERSION}"
+
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise exec "node@${NODE_VERSION}" -- npm install -g "ctx7@${CTX7_VERSION}"
 
 # Caveman ≥1.8.0 native opencode plugin needs repoRoot (a local clone);
 # curl-pipe can't do it. Shallow-clone at the pinned tag, run bin/install.js.
