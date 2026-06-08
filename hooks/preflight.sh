@@ -71,6 +71,7 @@ verify_codex_caveman_skills() {
 case "${JACKIN_AGENT:-}" in
     claude) register_caveman_shrink ;;
     codex)  verify_codex_caveman_skills ;;
+    grok)   log "grok agent — no special preflight yet (uses --always-approve from jackin)" ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;
     *)      warn "unknown JACKIN_AGENT=${JACKIN_AGENT} — skipping per-agent setup" ;;
 esac
