@@ -7,7 +7,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
 ARG RUST_VERSION=1.96.0
-ARG CARGO_BINSTALL_VERSION=1.19.1
+ARG CARGO_BINSTALL_VERSION=1.20.0
 ARG NODE_VERSION=24.16.0
 ARG BUN_VERSION=1.3.14
 ARG JUST_VERSION=1.51.0
