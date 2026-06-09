@@ -1,0 +1,29 @@
+name: Jackin Toolchain
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Update Jackin toolchain
+        run: scripts/update-jackin-toolchain.sh
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@11e67aee91f45309e7b5e5297df0f1b0e0d2aebe # v7.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: renovate/jackin-toolchain
+          delete-branch: true
+          title: "build: update jackin toolchain"
+          commit-message: "build: update jackin toolchain"
+          signoff: true
+          body: |
+            Updates `jackin-toolchain/mise.toml` from upstream `jackin-project/jackin` `mise.toml`.

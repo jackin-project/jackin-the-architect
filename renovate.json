@@ -37,36 +37,6 @@
       "managerFilePatterns": [
         "/(^|/)Dockerfile$/"
       ],
-      "matchStrings": ["ARG NODE_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "node-version",
-      "packageNameTemplate": "node"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG BUN_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "oven-sh/bun",
-      "extractVersionTemplate": "^bun-v(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG JUST_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "casey/just",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
       "matchStrings": ["ARG OPENTOFU_VERSION=(?<currentValue>[\\d.]+)"],
       "datasourceTemplate": "github-releases",
       "packageNameTemplate": "opentofu/opentofu",
