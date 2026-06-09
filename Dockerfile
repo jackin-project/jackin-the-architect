@@ -29,6 +29,8 @@ ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
+    --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise trust /tmp/jackin-mise/mise.toml && \
     mkdir -p "${HOME}/.config/mise" && \
