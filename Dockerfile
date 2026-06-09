@@ -30,14 +30,12 @@ COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
 
 RUN mkdir -p \
     "${HOME}/.cache/mise" \
-    "${HOME}/.local/share/mise/downloads" \
     "${HOME}/.cargo/bin" \
     "${HOME}/.cargo/registry" \
     "${HOME}/.cargo/git"
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    --mount=type=cache,target=/home/agent/.local/share/mise/downloads,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
@@ -53,7 +51,6 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # tool's layer. Trips hadolint DL3059; the cache reuse is worth it.
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    --mount=type=cache,target=/home/agent/.local/share/mise/downloads,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
     mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
@@ -69,7 +66,6 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    --mount=type=cache,target=/home/agent/.local/share/mise/downloads,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "opentofu@${OPENTOFU_VERSION}" && \
     mise use -g --pin "opentofu@${OPENTOFU_VERSION}"
