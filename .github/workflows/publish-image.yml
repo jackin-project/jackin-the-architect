@@ -3,10 +3,6 @@ name: Publish Image
 on:
   push:
     branches: [main]
-    paths:
-      - 'Dockerfile'
-      - 'jackin.role.toml'
-      - '.github/workflows/publish-image.yml'
   workflow_dispatch:
 
 jobs:

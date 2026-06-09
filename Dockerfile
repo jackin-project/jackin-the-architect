@@ -26,7 +26,7 @@ USER agent
 
 ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 
-COPY --chown=agent:agent jackin-toolchain/ /tmp/jackin-mise/
+COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
@@ -36,8 +36,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     mise install -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise rust && \
     mise install && \
-    mise exec -- rustup component add rust-analyzer && \
-    rm -rf /tmp/jackin-mise
+    mise exec -- rustup component add rust-analyzer
 
 # Per-tool RUNs are deliberate: bumping one ARG only invalidates that
 # tool's layer. Trips hadolint DL3059; the cache reuse is worth it.
