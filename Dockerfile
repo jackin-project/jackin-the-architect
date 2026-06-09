@@ -28,6 +28,8 @@ ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 
 COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
 
+RUN mkdir -p "${HOME}/.cargo/bin" "${HOME}/.cargo/registry" "${HOME}/.cargo/git"
+
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
