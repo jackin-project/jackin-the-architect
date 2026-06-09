@@ -3,7 +3,6 @@ FROM projectjackin/construct:0.4-trixie@sha256:6910f6ea9dd3ceffd9f9f08c8345b42e9
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG CARGO_BINSTALL_VERSION=1.20.0
-ARG RUST_VERSION=1.96.0
 ARG OPENTOFU_VERSION=1.12.1
 # CAVEMAN_VERSION must be a release tag from
 # https://github.com/JuliusBrussee/caveman/releases — never `main`,
@@ -27,17 +26,17 @@ USER agent
 
 ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 
-COPY --chown=agent:agent jackin-toolchain/mise.toml /tmp/jackin-mise/
+COPY --chown=agent:agent jackin-toolchain/ /tmp/jackin-mise/
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise trust /tmp/jackin-mise/mise.toml && \
     mkdir -p "${HOME}/.config/mise" && \
     cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
-    mise install "rust@${RUST_VERSION}" && \
-    mise use -g --pin "rust@${RUST_VERSION}" && \
+    mise install -C /tmp/jackin-mise rust && \
+    mise use -g --pin -C /tmp/jackin-mise rust && \
     mise install && \
-    mise exec -- rustup component add clippy rustfmt rust-analyzer && \
+    mise exec -- rustup component add rust-analyzer && \
     rm -rf /tmp/jackin-mise
 
 # Per-tool RUNs are deliberate: bumping one ARG only invalidates that

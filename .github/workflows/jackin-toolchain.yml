@@ -14,8 +14,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          install: false
       - name: Update Jackin toolchain
-        run: scripts/update-jackin-toolchain.sh
+        run: mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs
       - name: Create pull request
         uses: peter-evans/create-pull-request@11e67aee91f45309e7b5e5297df0f1b0e0d2aebe # v7.0.8
         with:
