@@ -20,12 +20,15 @@ In a Codex session, caveman is delivered through Codex skills under `~/.agents/s
 
 ## Environment
 
-Versions pinned in `Dockerfile` ARGs (`RUST_VERSION`, `NODE_VERSION`, `BUN_VERSION`, `JUST_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and contains only its `[tools]` section; task definitions are intentionally omitted. Refresh it with `scripts/update-jackin-toolchain.sh`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
 
-- **Rust** (via mise) with clippy, rustfmt, rust-analyzer, cargo-nextest, cargo-watch, lychee
+Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`RUST_VERSION`, `CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+
+- **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml`
+- **Rust** (via mise) with clippy, rustfmt, rust-analyzer
+- **Cargo helper tools**: cargo-watch and lychee
 - **Node.js** (via mise)
 - **Bun** (via mise) for jackin docs development
-- **Just** (via mise) for jackin task recipes
 - **OpenTofu** (via mise)
 - **Context7** (npm) — up-to-date library docs via MCP
 - **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)

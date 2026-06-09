@@ -2,16 +2,13 @@ FROM projectjackin/construct:0.4-trixie@sha256:6910f6ea9dd3ceffd9f9f08c8345b42e9
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG CARGO_BINSTALL_VERSION=1.20.0
+ARG RUST_VERSION=1.96.0
+ARG OPENTOFU_VERSION=1.12.1
 # CAVEMAN_VERSION must be a release tag from
 # https://github.com/JuliusBrussee/caveman/releases — never `main`,
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
-ARG RUST_VERSION=1.96.0
-ARG CARGO_BINSTALL_VERSION=1.20.0
-ARG NODE_VERSION=24.16.0
-ARG BUN_VERSION=1.3.14
-ARG JUST_VERSION=1.52.0
-ARG OPENTOFU_VERSION=1.12.1
 ARG CAVEMAN_VERSION=1.8.2
 ARG CTX7_VERSION=0.4.4
 
@@ -28,17 +25,23 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 USER agent
 
-ENV MISE_TRUSTED_CONFIG_PATHS=/workspace
+ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
+
+COPY --chown=agent:agent jackin-toolchain/mise.toml /tmp/jackin-mise/
+
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise trust /tmp/jackin-mise/mise.toml && \
+    mkdir -p "${HOME}/.config/mise" && \
+    cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
+    mise install "rust@${RUST_VERSION}" && \
+    mise use -g --pin "rust@${RUST_VERSION}" && \
+    mise install && \
+    mise exec -- rustup component add clippy rustfmt rust-analyzer && \
+    rm -rf /tmp/jackin-mise
 
 # Per-tool RUNs are deliberate: bumping one ARG only invalidates that
 # tool's layer. Trips hadolint DL3059; the cache reuse is worth it.
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "rust@${RUST_VERSION}" && \
-    mise use -g --pin "rust@${RUST_VERSION}" && \
-    . ~/.profile && \
-    rustup component add clippy rustfmt rust-analyzer
-
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
@@ -51,22 +54,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     . ~/.profile && \
-    cargo binstall --no-confirm cargo-nextest cargo-watch lychee
-
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "node@${NODE_VERSION}" && \
-    mise use -g --pin "node@${NODE_VERSION}"
-
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "bun@${BUN_VERSION}" && \
-    mise use -g --pin "bun@${BUN_VERSION}"
-
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "just@${JUST_VERSION}" && \
-    mise use -g --pin "just@${JUST_VERSION}"
+    cargo binstall --no-confirm cargo-watch lychee
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
@@ -75,7 +63,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise exec "node@${NODE_VERSION}" -- npm install -g "ctx7@${CTX7_VERSION}"
+    mise exec -- npm install -g "ctx7@${CTX7_VERSION}"
 
 # Caveman ≥1.8.0 native opencode plugin needs repoRoot (a local clone);
 # curl-pipe can't do it. Shallow-clone at the pinned tag, run bin/install.js.
