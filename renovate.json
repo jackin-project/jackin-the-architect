@@ -16,16 +16,6 @@
       "managerFilePatterns": [
         "/(^|/)Dockerfile$/"
       ],
-      "matchStrings": ["ARG RUST_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "rust-lang/rust",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
       "matchStrings": ["ARG CARGO_BINSTALL_VERSION=(?<currentValue>[\\d.]+)"],
       "datasourceTemplate": "github-releases",
       "packageNameTemplate": "cargo-bins/cargo-binstall",
