@@ -20,7 +20,7 @@ jobs:
       - name: Update Jackin toolchain
         run: mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs
       - name: Create pull request
-        uses: peter-evans/create-pull-request@11e67aee91f45309e7b5e5297df0f1b0e0d2aebe # v7.0.8
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: renovate/jackin-toolchain
