@@ -1,4 +1,4 @@
-FROM projectjackin/construct:0.4-trixie@sha256:6910f6ea9dd3ceffd9f9f08c8345b42e967d8e930de3e037e1ffcd0e052b8e4e
+FROM projectjackin/construct:0.5-trixie@sha256:d8d0726c7300615e82ac6c54af486175e6fb3363953831b7a41eea0ab5561fc5
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -34,6 +34,14 @@ RUN mkdir -p \
     "${HOME}/.cargo/registry" \
     "${HOME}/.cargo/git"
 
+# Per-tool RUNs are deliberate: bumping one ARG only invalidates that
+# tool's layer. Trips hadolint DL3059; the cache reuse is worth it.
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
+    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
+
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
@@ -42,18 +50,13 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     mise trust /tmp/jackin-mise/mise.toml && \
     mkdir -p "${HOME}/.config/mise" && \
     cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
+    # the cp replaces the global config and unpins cargo-binstall, leaving an
+    # orphaned shim that exits 1; re-pin so `mise install` binstalls cargo: tools
+    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
     mise install -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise rust && \
     mise install && \
     mise exec -- rustup component add rust-analyzer
-
-# Per-tool RUNs are deliberate: bumping one ARG only invalidates that
-# tool's layer. Trips hadolint DL3059; the cache reuse is worth it.
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
-    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
 
 # cargo-binstall downloads prebuilt binaries — avoids compiling from source.
 # Cache mounts preserve the crate registry across layer rebuilds on persistent runners.
