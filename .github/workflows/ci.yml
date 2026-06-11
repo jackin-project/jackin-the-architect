@@ -5,10 +5,45 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      lanes:
+        description: |
+          Which runner(s) to run on. Default github; use both for parity runs.
+        type: choice
+        default: github
+        options: [github, velnor, both]
 
 jobs:
+  matrix-setup:
+    name: Select runner lane
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      configs: ${{ steps.set.outputs.configs }}
+    steps:
+      - id: set
+        env:
+          LANES: ${{ github.event_name == 'workflow_dispatch' && inputs.lanes || 'github' }}
+        run: |
+          github='{"lane":"GitHub","runner":"\"ubuntu-24.04\""}'
+          velnor='{"lane":"Velnor","runner":"[\"self-hosted\",\"velnor-target-mvp\"]"}'
+          case "$LANES" in
+            velnor) configs="[$velnor]" ;;
+            both)   configs="[$github,$velnor]" ;;
+            *)      configs="[$github]" ;;
+          esac
+          echo "configs=$configs" >> "$GITHUB_OUTPUT"
+
   validate:
-    runs-on: ubuntu-24.04
+    needs: matrix-setup
+    name: validate (${{ matrix.config.lane }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.matrix-setup.outputs.configs) }}
+    runs-on: ${{ fromJSON(matrix.config.runner) }}
     permissions:
       contents: read
     steps:

@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      lane:
+        description: |
+          Runner lane. Publish mutates registry state, so it runs on one
+          lane only: github (default) or velnor.
+        type: choice
+        default: github
+        options: [github, velnor]
 
 jobs:
   publish:
@@ -11,6 +19,13 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    with:
+      # GitHub by default (native arm64 runners). lane=velnor runs on sentry
+      # (x86_64); its arm64 leg builds under QEMU because
+      # runner-amd64 == runner-arm64 engages binfmt in the reusable workflow.
+      runner-amd64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04' }}
+      runner-arm64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04-arm' }}
+      runner-merge: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04' }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
