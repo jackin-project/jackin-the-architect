@@ -4,11 +4,11 @@
 # jackin injects the claude CLI per container at launch time.
 set -euo pipefail
 
-trap 'printf "[architect-pre-launch] ERROR: failed at line %s (exit %s)\n" "$LINENO" "$?" >&2; exit 1' ERR
+trap 'printf "[architect-preflight] ERROR: failed at line %s (exit %s)\n" "$LINENO" "$?" >&2; exit 1' ERR
 
-log()  { printf '[architect-pre-launch] %s\n' "$*"; }
-warn() { printf '[architect-pre-launch] WARNING: %s\n' "$*" >&2; }
-err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
+log()  { printf '[architect-preflight] %s\n' "$*"; }
+warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
+err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
 # Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
 # Without an API key the launch is treated as Context7-disabled — no
@@ -17,16 +17,18 @@ err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
 #   jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'
 # then export CONTEXT7_API_KEY=ctx7sk-... on the host.
 #
-# Args: ctx7 CLI flags selecting the agent and mode (e.g. "--claude --mcp").
+# Args: label, then ctx7 CLI flags selecting the agent and mode.
 setup_context7() {
-    if [ -z "${CONTEXT7_API_KEY:-}" ]; then
-        log "CONTEXT7_API_KEY unset — skipping Context7 setup for $1"
+    local agent_label="$1"
+    shift
+
+    if [[ -z "${CONTEXT7_API_KEY:-}" ]]; then
+        log "CONTEXT7_API_KEY unset — skipping Context7 setup for ${agent_label}"
         return 0
     fi
 
-    log "configuring Context7 for $1"
-    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- \
-        ctx7 setup --api-key "$CONTEXT7_API_KEY" "$@" --yes; then
+    log "configuring Context7 for ${agent_label}"
+    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup "$@" --yes; then
         err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
         exit 1
     fi

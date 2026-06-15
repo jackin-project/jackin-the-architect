@@ -1,6 +1,6 @@
 # AGENTS.md — jackin-the-architect
 
-A privileged Claude Code / Codex agent image for developing jackin itself. Extends `projectjackin/construct:trixie` and layers the generated toolchain from Jackin's upstream `mise.toml`, OpenTofu, the caveman token-compression hooks (claude) + skills (codex), and a curated plugin set including `pr-review-toolkit`, `security-guidance`, `rust-best-practices`, and `caveman`. Named `the-architect` because it has the broadest operator capability of the agent role family — it can manage the entire `jackin-project` repo collection.
+A privileged Claude Code / Codex agent image for developing jackin itself. Extends the digest-pinned `projectjackin/construct:<version>-trixie` base and layers the generated toolchain from Jackin's upstream `mise.toml`, OpenTofu, the caveman token-compression hooks (claude) + skills (codex), and a curated plugin set including `pr-review-toolkit`, `security-guidance`, `rust-best-practices`, and `caveman`. Named `the-architect` because it has the broadest operator capability of the agent role family — it can manage the entire `jackin-project` repo collection.
 
 **Image distribution is public.** Because of the plugin breadth and the presence of OpenTofu (which can manage org-write credentials at runtime), this image has a larger blast radius than the sibling code-review-focused role. Treat it with proportionally more care.
 
@@ -12,12 +12,12 @@ Threat surface for this image:
 2. **OpenTofu credential adjacency.** An operator running this image against `jackin-github-terraform` exports `GITHUB_TOKEN` with org-admin scope into the shell. Anything the agent does (any plugin, any skill) can see that token via `/proc/*/environ`.
 3. **Rust cargo tools.** `jackin-toolchain/mise.toml` installs several `cargo:*` tools generated from Jackin's upstream `mise.toml`, and Architect additionally installs `cargo-watch` and `lychee` through `cargo-binstall`. Root tool versions are pinned where Jackin pins them; Architect-only cargo helpers are not version-pinned by this repo.
 4. **Multi-ecosystem supply chain.** Each ecosystem (mise's plugin registry plus the per-runtime upstreams it fetches from for Rust, Node, Bun, Zig, Syft, Cosign, OpenTofu; crates.io via cargo tools; npm via `npm install -g ctx7`; the pinned caveman GitHub ref) brings its own trust root.
-5. **Context7 MCP.** Optional `CONTEXT7_API_KEY` configures a third-party MCP server with read access to the agent's docs corpus. Treat the key like any other credential — do not commit, do not bake into the image. The preflight hook is fully non-interactive: it passes `--api-key` to `ctx7 setup` (never falls back to the OAuth device flow) and skips setup when the key is absent, so a launch only enables Context7 when the operator has explicitly provided a key.
-6. **Base image supply chain.** `FROM projectjackin/construct:trixie` — whoever can push to `projectjackin/construct` serves the base. The `trixie` tag is mutable; pinning by digest would harden this but breaks the monthly base-image refresh flow.
+5. **Context7 MCP.** Optional `CONTEXT7_API_KEY` configures a third-party MCP server with read access to the agent's docs corpus. Treat the key like any other credential — do not commit, do not bake into the image.
+6. **Base image supply chain.** `projectjackin/construct:<version>-trixie` is pinned by digest in the Dockerfile. Whoever can push to `projectjackin/construct` still serves the base image, so digest refreshes require review.
 
 ## Hard rules (do not break these)
 
-1. **Final stage must be `FROM projectjackin/construct:trixie`.** This is the contract jackin enforces; breaking it makes the role unloadable.
+1. **Final stage must use a digest-pinned `projectjackin/construct:<version>-trixie` base.** This is the contract jackin enforces; breaking it makes the role unloadable.
 2. **Never add a plugin without documenting its trust anchor.** Marketplace name alone is insufficient — note in the PR why the specific plugin is trusted.
 3. **Never `ENV GITHUB_TOKEN=...` or any credential ENV.** OpenTofu reads from the shell at run time; baking any credential into the image exposes it to every puller.
 4. **`cargo install` without `--locked` is forbidden.** Every `cargo install` line must include `--locked` so the lock file pins transitive deps. The pre-commit check below enforces this; do not work around it.
