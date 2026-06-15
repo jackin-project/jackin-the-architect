@@ -19,12 +19,14 @@ err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
 #
 # Args: ctx7 CLI flags selecting the agent and mode (e.g. "--claude --mcp").
 setup_context7() {
-    if [ -z "${CONTEXT7_API_KEY:-}" ]; then
-        log "CONTEXT7_API_KEY unset — skipping Context7 setup for $1"
+    local agent_label="$1"
+    shift
+    if [[ -z "${CONTEXT7_API_KEY:-}" ]]; then
+        log "CONTEXT7_API_KEY unset — skipping Context7 setup for $agent_label"
         return 0
     fi
 
-    log "configuring Context7 for $1"
+    log "configuring Context7 for $agent_label"
     if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- \
         ctx7 setup --api-key "$CONTEXT7_API_KEY" "$@" --yes; then
         err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
