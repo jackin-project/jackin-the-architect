@@ -10,13 +10,27 @@ log()  { printf '[architect-pre-launch] %s\n' "$*"; }
 warn() { printf '[architect-pre-launch] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
 
-if [ -n "${CONTEXT7_API_KEY:-}" ]; then
-    log "configuring Context7 MCP server"
-    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup --claude --mcp -y; then
+# Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
+# Without an API key the launch is treated as Context7-disabled — no
+# OAuth device flow is attempted (operators run headlessly and OAuth
+# would block). Set the key via operator env with a host reference:
+#   jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'
+# then export CONTEXT7_API_KEY=ctx7sk-... on the host.
+#
+# Args: ctx7 CLI flags selecting the agent and mode (e.g. "--claude --mcp").
+setup_context7() {
+    if [ -z "${CONTEXT7_API_KEY:-}" ]; then
+        log "CONTEXT7_API_KEY unset — skipping Context7 setup for $1"
+        return 0
+    fi
+
+    log "configuring Context7 for $1"
+    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- \
+        ctx7 setup --api-key "$CONTEXT7_API_KEY" "$@" --yes; then
         err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
         exit 1
     fi
-fi
+}
 
 # caveman-shrink wraps another MCP server's stdio and compresses the
 # responses to cut token cost. The registration here is a placeholder
@@ -69,9 +83,24 @@ verify_codex_caveman_skills() {
 }
 
 case "${JACKIN_AGENT:-}" in
-    claude) register_caveman_shrink ;;
-    codex)  verify_codex_caveman_skills ;;
-    grok)   log "grok agent — no special preflight yet (uses --always-approve from jackin)" ;;
+    claude)
+        register_caveman_shrink
+        setup_context7 claude --claude --mcp
+        ;;
+    codex)
+        verify_codex_caveman_skills
+        setup_context7 codex --codex --mcp
+        ;;
+    opencode)
+        setup_context7 opencode --opencode --mcp
+        ;;
+    amp|kimi|grok)
+        # No native MCP target — install the docs skill under
+        # ~/.agents/skills/ so the agent invokes `ctx7 library` /
+        # `ctx7 docs` directly. grok also has no per-agent step
+        # beyond this (uses --always-approve from jackin).
+        setup_context7 "$JACKIN_AGENT" --cli --universal
+        ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;
     *)      warn "unknown JACKIN_AGENT=${JACKIN_AGENT} — skipping per-agent setup" ;;
 esac
