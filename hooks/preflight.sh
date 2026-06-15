@@ -11,7 +11,11 @@ warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
 # Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
-# Without an API key the launch is treated as Context7-disabled.
+# Without an API key the launch is treated as Context7-disabled — no
+# OAuth device flow is attempted (operators run headlessly and OAuth
+# would block). Set the key via operator env with a host reference:
+#   jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'
+# then export CONTEXT7_API_KEY=ctx7sk-... on the host.
 #
 # Args: label, then ctx7 CLI flags selecting the agent and mode.
 setup_context7() {
@@ -93,6 +97,10 @@ case "${JACKIN_AGENT:-}" in
         setup_context7 opencode --opencode --mcp
         ;;
     amp|kimi|grok)
+        # No native MCP target — install the docs skill under
+        # ~/.agents/skills/ so the agent invokes `ctx7 library` /
+        # `ctx7 docs` directly. grok also has no per-agent step
+        # beyond this (uses --always-approve from jackin).
         setup_context7 "$JACKIN_AGENT" --cli --universal
         ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;

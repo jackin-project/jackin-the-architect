@@ -80,21 +80,30 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # Caveman ≥1.8.0 native opencode plugin needs repoRoot (a local clone);
 # curl-pipe can't do it. Shallow-clone at the pinned tag, run bin/install.js.
 #
-# Agent CLIs aren't on PATH at build time (jackin injects them per-container),
-# so auto-detection finds nothing — `--only` forces each target. `--no-mcp-shrink`
-# skips registration that needs the claude CLI; preflight.sh re-runs it at
-# container start.
+# `--only opencode` covers the opencode native plugin (CLI copies files into
+# ~/.config/opencode/plugins/caveman/). Claude registration is owned by the
+# jackin plugin bootstrap — the derived Dockerfile appends
+# `RUN claude plugin install caveman@caveman` from the `[claude].plugins` and
+# `[[claude.marketplaces]]` declarations in jackin.role.toml — so we
+# deliberately do NOT pass `--only claude` here. Doing so would race the
+# plugin bootstrap: the caveman installer runs before jackin's claude-CLI
+# install block, the `claude plugin install` call fails, and the installer
+# falls back to wiring hooks in settings.json. The plugin bootstrap then
+# runs after, registers hooks via the manifest, and both paths fire on
+# every event (caveman issue #392 — double CAVEMAN MODE block, double
+# reinforcement line).
 #
-# Caveman 1.9+ installs Claude hooks through the Claude plugin manifest instead
-# of copying standalone files to ~/.claude/hooks. Rely on the installer exit
-# status for Claude registration. Codex and Amp still use explicit
-# `skills add --global` so the canonical tree exists at
-# `${HOME}/.agents/skills/caveman/`, which is the path
-# `hooks/preflight.sh::verify_codex_caveman_skills` checks.
+# `--no-mcp-shrink` keeps the caveman-shrink MCP proxy out of this step;
+# `hooks/preflight.sh::register_caveman_shrink` does it at container start
+# where the claude CLI is guaranteed to be on PATH.
+#
+# Codex and Amp have no Claude-plugin path, so the caveman skills tree at
+# `${HOME}/.agents/skills/caveman/` is installed via `skills add --global`.
+# `hooks/preflight.sh::verify_codex_caveman_skills` checks that file is
+# present for codex.
 RUN . ~/.profile && \
-    mkdir -p "${HOME}/.claude" "${HOME}/.codex" && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
-    node /tmp/caveman/bin/install.js --only claude --only opencode --no-mcp-shrink && \
+    node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
     cd "${HOME}" && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \

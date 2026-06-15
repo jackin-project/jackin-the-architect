@@ -53,7 +53,15 @@ default = "1"
 [env.CLAUDE_CODE_MAX_OUTPUT_TOKENS]
 default = "64000"
 
+# Context7 API key. Declared as a non-interactive shape so jackin never
+# prompts at launch. Default is empty; operator env overlays a real
+# value when the operator has set one. Wire it up once with a host
+# reference and every launch reads it automatically:
+#
+#   jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'
+#
+# then export CONTEXT7_API_KEY=ctx7sk-... in the host shell. When the
+# key is absent the preflight hook skips Context7 setup entirely
+# (no OAuth device flow).
 [env.CONTEXT7_API_KEY]
-interactive = true
-skippable = true
-prompt = "Context7 API key (leave empty to skip MCP setup)"
+default = ""
