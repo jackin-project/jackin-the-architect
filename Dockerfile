@@ -106,3 +106,21 @@ RUN . ~/.profile && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/caveman/SKILL.md" && \
     rm -rf /tmp/caveman
+
+# jackin-dev workflow skills (propose, brainstorm, research, create-pr, merge-pr,
+# release*). Claude installs them via `jackin-dev@jackin-marketplace` in
+# jackin.role.toml; codex/amp/opencode/kimi all read ${HOME}/.agents/skills/,
+# so install the portable SKILL.md tree there once, same pattern as caveman
+# above. `--global` writes the canonical ~/.agents/skills/<skill>/ tree; opencode
+# and kimi read that same path, so the codex+amp installs cover all four agents.
+# `-s '*'` grabs every skill (the default takes only a root SKILL.md, and
+# jackin-dev has none — its skills live under skills/<name>/SKILL.md).
+#
+# Tracks jackin-dev `main` (first-party, no tagged release yet — the skill set
+# is still iterating). Pin to `jackin-project/jackin-dev#vX.Y.Z` once it tags.
+RUN . ~/.profile && \
+    cd "${HOME}" && \
+    npx -y skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
+    npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
+    test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
+    test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
