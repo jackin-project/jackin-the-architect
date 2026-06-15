@@ -10,13 +10,25 @@ log()  { printf '[architect-preflight] %s\n' "$*"; }
 warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
-if [ -n "${CONTEXT7_API_KEY:-}" ]; then
-    log "configuring Context7 MCP server"
-    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup --claude --mcp -y; then
+# Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
+# Without an API key the launch is treated as Context7-disabled.
+#
+# Args: label, then ctx7 CLI flags selecting the agent and mode.
+setup_context7() {
+    local agent_label="$1"
+    shift
+
+    if [[ -z "${CONTEXT7_API_KEY:-}" ]]; then
+        log "CONTEXT7_API_KEY unset — skipping Context7 setup for ${agent_label}"
+        return 0
+    fi
+
+    log "configuring Context7 for ${agent_label}"
+    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup "$@" --yes; then
         err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
         exit 1
     fi
-fi
+}
 
 # caveman-shrink wraps another MCP server's stdio and compresses the
 # responses to cut token cost. The registration here is a placeholder
@@ -69,9 +81,20 @@ verify_codex_caveman_skills() {
 }
 
 case "${JACKIN_AGENT:-}" in
-    claude) register_caveman_shrink ;;
-    codex)  verify_codex_caveman_skills ;;
-    grok)   log "grok agent — no special preflight yet (uses --always-approve from jackin)" ;;
+    claude)
+        register_caveman_shrink
+        setup_context7 claude --claude --mcp
+        ;;
+    codex)
+        verify_codex_caveman_skills
+        setup_context7 codex --codex --mcp
+        ;;
+    opencode)
+        setup_context7 opencode --opencode --mcp
+        ;;
+    amp|kimi|grok)
+        setup_context7 "$JACKIN_AGENT" --cli --universal
+        ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;
     *)      warn "unknown JACKIN_AGENT=${JACKIN_AGENT} — skipping per-agent setup" ;;
 esac
