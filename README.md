@@ -14,7 +14,7 @@ In a Codex session, caveman is delivered through Codex skills under `~/.agents/s
 
 ## Contract
 
-- Final Dockerfile stage must literally be `FROM projectjackin/construct:trixie`
+- Final Dockerfile stage must use the digest-pinned `projectjackin/construct:<version>-trixie` base.
 - Plugins are declared in `jackin.role.toml`
 - Threat model and hard rules: see [AGENTS.md](./AGENTS.md)
 
@@ -46,7 +46,7 @@ Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` an
 
 Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
-## Pre-launch hooks
+## Runtime hooks
 
 The `hooks/preflight.sh` script runs before the agent CLI starts:
 

@@ -4,11 +4,11 @@
 # jackin injects the claude CLI per container at launch time.
 set -euo pipefail
 
-trap 'printf "[architect-pre-launch] ERROR: failed at line %s (exit %s)\n" "$LINENO" "$?" >&2; exit 1' ERR
+trap 'printf "[architect-preflight] ERROR: failed at line %s (exit %s)\n" "$LINENO" "$?" >&2; exit 1' ERR
 
-log()  { printf '[architect-pre-launch] %s\n' "$*"; }
-warn() { printf '[architect-pre-launch] WARNING: %s\n' "$*" >&2; }
-err()  { printf '[architect-pre-launch] ERROR: %s\n'   "$*" >&2; }
+log()  { printf '[architect-preflight] %s\n' "$*"; }
+warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
+err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
 if [ -n "${CONTEXT7_API_KEY:-}" ]; then
     log "configuring Context7 MCP server"
