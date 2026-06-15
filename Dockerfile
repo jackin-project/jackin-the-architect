@@ -105,7 +105,6 @@ RUN . ~/.profile && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
     node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
-    cd "${HOME}" && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/caveman/SKILL.md" && \
@@ -123,7 +122,6 @@ RUN . ~/.profile && \
 # Tracks jackin-dev `main` (first-party, no tagged release yet — the skill set
 # is still iterating). Pin to `jackin-project/jackin-dev#vX.Y.Z` once it tags.
 RUN . ~/.profile && \
-    cd "${HOME}" && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
