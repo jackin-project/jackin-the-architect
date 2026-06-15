@@ -10,10 +10,6 @@ ARG OPENTOFU_VERSION=1.12.1
 # resolves tags but not arbitrary SHAs.
 ARG CAVEMAN_VERSION=1.8.2
 ARG CTX7_VERSION=0.4.4
-# JACKIN_DEV_VERSION must be a release tag from
-# https://github.com/jackin-project/jackin-dev/releases — never `main`,
-# never a raw commit SHA (the `skills` CLI shallow-clone resolves tags, not SHAs).
-ARG JACKIN_DEV_VERSION=0.3.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -119,9 +115,12 @@ RUN . ~/.profile && \
 # and kimi read that same path, so the codex+amp installs cover all four agents.
 # `-s '*'` grabs every skill (the default takes only a root SKILL.md, and
 # jackin-dev has none — its skills live under skills/<name>/SKILL.md).
+#
+# Tracks jackin-dev `main` (first-party, no tagged release yet — the skill set
+# is still iterating). Pin to `jackin-project/jackin-dev#vX.Y.Z` once it tags.
 RUN . ~/.profile && \
     cd "${HOME}" && \
-    npx -y skills add "jackin-project/jackin-dev#v${JACKIN_DEV_VERSION}" -s '*' -a codex --yes --global && \
-    npx -y skills add "jackin-project/jackin-dev#v${JACKIN_DEV_VERSION}" -s '*' -a amp --yes --global && \
+    npx -y skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
+    npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
