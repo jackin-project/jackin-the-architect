@@ -8,7 +8,7 @@ ARG OPENTOFU_VERSION=1.12.2
 # https://github.com/JuliusBrussee/caveman/releases — never `main`,
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
-ARG CAVEMAN_VERSION=1.8.2
+ARG CAVEMAN_VERSION=1.9.0
 ARG CTX7_VERSION=0.5.2
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
