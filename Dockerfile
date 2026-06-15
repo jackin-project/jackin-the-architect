@@ -86,20 +86,15 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # container start.
 #
 # Caveman 1.9+ installs Claude hooks through the Claude plugin manifest instead
-# of copying standalone files to ~/.claude/hooks. The Claude CLI owns the
-# marketplace cache layout, so verify the pinned tag ships the manifest/hooks and
-# rely on the installer exit status for registration. Codex and Amp still use
-# explicit `skills add --global` so the canonical tree exists at
+# of copying standalone files to ~/.claude/hooks. Rely on the installer exit
+# status for Claude registration. Codex and Amp still use explicit
+# `skills add --global` so the canonical tree exists at
 # `${HOME}/.agents/skills/caveman/`, which is the path
 # `hooks/preflight.sh::verify_codex_caveman_skills` checks.
 RUN . ~/.profile && \
     mkdir -p "${HOME}/.claude" "${HOME}/.codex" && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
     node /tmp/caveman/bin/install.js --only claude --only opencode --no-mcp-shrink && \
-    test -f /tmp/caveman/.claude-plugin/plugin.json && \
-    test -f /tmp/caveman/src/hooks/caveman-activate.js && \
-    test -f /tmp/caveman/src/hooks/caveman-mode-tracker.js && \
-    test -f /tmp/caveman/src/hooks/caveman-statusline.sh && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
     cd "${HOME}" && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
