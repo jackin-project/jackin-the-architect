@@ -9,7 +9,7 @@ ARG OPENTOFU_VERSION=1.12.2
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
 ARG CAVEMAN_VERSION=1.8.2
-ARG CTX7_VERSION=0.4.4
+ARG CTX7_VERSION=0.5.2
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
