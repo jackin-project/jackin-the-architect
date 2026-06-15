@@ -3,9 +3,6 @@
   "extends": [
     "config:best-practices"
   ],
-  "ignorePresets": [
-    "security:minimumReleaseAgeNpm"
-  ],
   "packageRules": [
     {
       "matchDatasources": ["docker"],
