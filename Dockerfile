@@ -21,7 +21,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libssl-dev \
     openssl \
     pkg-config \
-    cmake && \
+    cmake \
+    python3-pip && \
     sudo apt-get autoremove -y
 
 USER agent
@@ -161,7 +162,7 @@ COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.kimi-cod
 # token-optimization.md covers what to compress; rule-based compressors
 # (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
 # TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
-RUN python3 -m pip install --no-cache-dir --user "headroom-ai[mcp]==${HEADROOM_VERSION}"
+RUN python3 -m pip install --no-cache-dir --user --break-system-packages "headroom-ai[mcp]==${HEADROOM_VERSION}"
 
 # Expose user-installed Python binaries (headroom, etc.) on PATH.
 ENV PATH="/home/agent/.local/bin:${PATH}"
