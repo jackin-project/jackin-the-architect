@@ -12,6 +12,8 @@ ARG CAVEMAN_VERSION=1.9.0
 ARG CTX7_VERSION=0.5.3
 # See https://pypi.org/project/headroom-ai/ for the current release.
 ARG HEADROOM_VERSION=0.26.0
+# See https://github.com/astral-sh/uv/releases for the current release.
+ARG UV_VERSION=0.11.21
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -21,8 +23,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libssl-dev \
     openssl \
     pkg-config \
-    cmake \
-    python3-pip && \
+    cmake && \
     sudo apt-get autoremove -y
 
 USER agent
@@ -136,18 +137,18 @@ RUN . ~/.profile && \
 # CAVEMAN_DEFAULT_MODE env var (highest priority) is declared in jackin.role.toml.
 # Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
 # (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
-RUN mkdir -p /home/agent/.config/caveman
-COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
-
+#
 # Agent global-instruction files: single source → every runtime path.
 # Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
 # opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
 # grok: reads ~/.claude/CLAUDE.md natively; covered by the claude COPY below.
 RUN mkdir -p \
+    /home/agent/.config/caveman \
     /home/agent/.claude \
     /home/agent/.codex \
     /home/agent/.config/amp \
     /home/agent/.kimi-code
+COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.claude/CLAUDE.md
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.codex/AGENTS.md
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.config/amp/AGENTS.md
@@ -161,20 +162,25 @@ COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.kimi-code
 # token-optimization.md covers what to compress; rule-based compressors
 # (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
 # TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
-RUN python3 -m pip install --no-cache-dir --user --break-system-packages "headroom-ai[mcp]==${HEADROOM_VERSION}"
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
+    --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    . ~/.profile && \
+    cargo binstall --no-confirm "uv@${UV_VERSION}"
 
-# Expose user-installed Python binaries (headroom, etc.) on PATH.
+RUN . ~/.profile && uv tool install "headroom-ai[mcp]==${HEADROOM_VERSION}"
+
+# Expose uv tool binaries (headroom, etc.) on PATH.
 ENV PATH="/home/agent/.local/bin:${PATH}"
 
 # Bake headroom MCP entry into opencode and kimi configs at build time.
 # Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
 # Codex and Amp handled in hooks/preflight.sh (prefer CLI for idempotency).
-RUN { \
-      printf '%s\n' \
-        "import json,os" \
-        "HOME=os.environ['HOME']" \
-        "oc=json.load(open(HOME+'/.config/opencode/opencode.json'))" \
-        "oc.setdefault('mcp',{})['headroom']={'command':'headroom','args':['mcp','serve']}" \
-        "json.dump(oc,open(HOME+'/.config/opencode/opencode.json','w'),indent=2)" \
-        "json.dump({'mcpServers':{'headroom':{'command':'headroom','args':['mcp','serve']}}},open(HOME+'/.kimi-code/mcp.json','w'),indent=2)"; \
-    } | python3
+RUN . ~/.profile && node -e '\
+  const fs=require("fs"),h=process.env.HOME;\
+  const oc=JSON.parse(fs.readFileSync(h+"/.config/opencode/opencode.json","utf8"));\
+  (oc.mcp||(oc.mcp={})).headroom={command:"headroom",args:["mcp","serve"]};\
+  fs.writeFileSync(h+"/.config/opencode/opencode.json",JSON.stringify(oc,null,2));\
+  fs.writeFileSync(h+"/.kimi-code/mcp.json",JSON.stringify({mcpServers:{headroom:{command:"headroom",args:["mcp","serve"]}}},null,2));\
+'
