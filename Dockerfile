@@ -150,7 +150,6 @@ RUN mkdir -p \
     /home/agent/.kimi-code
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.claude/CLAUDE.md
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.codex/AGENTS.md
-COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.config/AGENTS.md
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.config/amp/AGENTS.md
 COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.kimi-code/AGENTS.md
 
