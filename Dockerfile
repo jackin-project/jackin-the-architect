@@ -9,9 +9,9 @@ ARG OPENTOFU_VERSION=1.12.2
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
 ARG CAVEMAN_VERSION=1.9.0
-ARG CTX7_VERSION=0.5.2
+ARG CTX7_VERSION=0.5.3
 # See https://pypi.org/project/headroom-ai/ for the current release.
-ARG HEADROOM_VERSION=0.25.0
+ARG HEADROOM_VERSION=0.26.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
