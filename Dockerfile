@@ -161,7 +161,10 @@ COPY --chown=agent:agent token-optimization.md /home/agent/.kimi-code/AGENTS.md
 # token-optimization.md covers what to compress; rule-based compressors
 # (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
 # TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
-RUN python3 -m pip install --no-cache-dir "headroom-ai[mcp]==${HEADROOM_VERSION}"
+RUN python3 -m pip install --no-cache-dir --user "headroom-ai[mcp]==${HEADROOM_VERSION}"
+
+# Expose user-installed Python binaries (headroom, etc.) on PATH.
+ENV PATH="/home/agent/.local/bin:${PATH}"
 
 # Bake headroom MCP entry into opencode and kimi configs at build time.
 # Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
