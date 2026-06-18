@@ -28,7 +28,7 @@ setup_context7() {
     fi
 
     log "configuring Context7 for ${agent_label}"
-    if ! CONTEXT7_API_KEY="$CONTEXT7_API_KEY" mise exec -- ctx7 setup "$@" --yes; then
+    if ! mise exec -- ctx7 setup "$@" --api-key "$CONTEXT7_API_KEY" -y; then
         err "ctx7 setup failed (exit $?). Check CONTEXT7_API_KEY and reachability of context7.com"
         exit 1
     fi
