@@ -65,3 +65,11 @@ default = "64000"
 # (no OAuth device flow).
 [env.CONTEXT7_API_KEY]
 default = ""
+
+# Caveman ultra is the default intensity for every agent in this role.
+# Highest-priority override in caveman's config hierarchy — the plugin
+# and skills tree read this before falling back to ~/.config/caveman/config.json
+# or any per-workspace stored mode. Operator can still override per-launch:
+#   CAVEMAN_DEFAULT_MODE=full jackin console
+[env.CAVEMAN_DEFAULT_MODE]
+default = "ultra"
