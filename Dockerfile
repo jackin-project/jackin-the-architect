@@ -137,7 +137,7 @@ RUN . ~/.profile && \
 # Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
 # (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
 RUN mkdir -p /home/agent/.config/caveman
-COPY --chown=agent:agent --chmod=644 caveman-config.json /home/agent/.config/caveman/config.json
+COPY --chown=agent:agent --chmod=444 caveman-config.json /home/agent/.config/caveman/config.json
 
 # Agent global-instruction files: single source → every runtime path.
 # Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
