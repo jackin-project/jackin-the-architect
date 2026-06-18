@@ -72,6 +72,24 @@ register_headroom_mcp() {
     esac
 }
 
+# Write the caveman-active flag file for agents that use the Claude Code
+# plugin hook system (caveman-mode-tracker.js reads this on every
+# UserPromptSubmit). Writing here ensures the flag exists before the
+# first prompt, so caveman is active from turn 1 — not from turn 2
+# after the SessionStart hook has fired and been processed.
+#
+# CAVEMAN_DEFAULT_MODE is already set to "ultra" via jackin.role.toml.
+# printf (not echo) avoids a trailing newline that would make readFlag
+# return null (the whitelist check trims, but belt-and-suspenders).
+seed_caveman_flag() {
+    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+    local flag="${claude_dir}/.caveman-active"
+    local mode="${CAVEMAN_DEFAULT_MODE:-ultra}"
+    mkdir -p "${claude_dir}"
+    printf '%s' "${mode}" > "${flag}"
+    log "caveman flag seeded: ${flag} → ${mode}"
+}
+
 verify_codex_caveman_skills() {
     if [[ -f "${HOME}/.agents/skills/caveman/SKILL.md" ]]; then
         log "codex caveman skills present in ${HOME}/.agents/skills"
@@ -85,6 +103,7 @@ verify_codex_caveman_skills() {
 
 case "${JACKIN_AGENT:-}" in
     claude)
+        seed_caveman_flag
         setup_context7 claude --claude --mcp
         register_headroom_mcp
         ;;

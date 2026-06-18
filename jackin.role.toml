@@ -58,7 +58,7 @@ default = "64000"
 # value when the operator has set one. Wire it up once with a host
 # reference and every launch reads it automatically:
 #
-#   jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'
+#   jackin config env set CONTEXT7_API_KEY ${CONTEXT7_API_KEY}
 #
 # then export CONTEXT7_API_KEY=ctx7sk-... in the host shell. When the
 # key is absent the preflight hook skips Context7 setup entirely
@@ -73,3 +73,12 @@ default = ""
 #   CAVEMAN_DEFAULT_MODE=full jackin console
 [env.CAVEMAN_DEFAULT_MODE]
 default = "ultra"
+
+# Explicit Claude Code config dir. Aligns the session process and the
+# hook subprocesses (SessionStart/UserPromptSubmit) on the same path so
+# the caveman flag file written by one is read by the other. Without
+# this, os.homedir() inside a hook subprocess may resolve differently
+# than CLAUDE_CONFIG_DIR in the parent session, silently breaking the
+# per-turn caveman reinforcement on the first prompt.
+[env.CLAUDE_CONFIG_DIR]
+default = "/home/agent/.claude"
