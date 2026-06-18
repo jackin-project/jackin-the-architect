@@ -34,43 +34,42 @@ setup_context7() {
     fi
 }
 
-# caveman-shrink wraps another MCP server's stdio and compresses the
-# responses to cut token cost. The registration here is a placeholder
-# — wire it to a real upstream by editing the `mcpServers` entry to
-# append the upstream after the caveman-shrink arg list, e.g.:
-#
-#   {
-#     "mcpServers": {
-#       "fs-shrunk": {
-#         "command": "npx",
-#         "args": ["caveman-shrink", "npx",
-#                  "@modelcontextprotocol/server-filesystem", "/path"]
-#       }
-#     }
-#   }
-#
-# Reference: https://github.com/JuliusBrussee/caveman/tree/main/mcp-servers/caveman-shrink
-register_caveman_shrink() {
-    # JACKIN_AGENT=claude is contracted to mean the claude CLI is on
-    # PATH; a missing binary here is a contract violation, not a skip.
-    if ! command -v claude >/dev/null 2>&1; then
-        err "JACKIN_AGENT=claude but claude CLI not on PATH — jackin runtime contract violated"
-        exit 1
-    fi
-
-    # Capture stderr so the benign "No MCP server with name …" case
-    # is distinguished from a real auth/parse/crash error.
-    local mcp_get_err
-    if mcp_get_err="$(claude mcp get caveman-shrink 2>&1 >/dev/null)"; then
+# Register headroom as an MCP server for the active agent.
+# Headroom exposes headroom_compress / headroom_retrieve / headroom_stats.
+# MCP mode only — proxy mode conflicts with Claude Code's prompt-cache management.
+# opencode / kimi: baked into their JSON configs at image build time.
+# grok: reads ~/.claude/mcp.json written at build time; no registration needed here.
+register_headroom_mcp() {
+    if ! command -v headroom >/dev/null 2>&1; then
+        warn "headroom not on PATH — skipping MCP registration for ${JACKIN_AGENT:-unknown}"
         return 0
     fi
-    if [[ "$mcp_get_err" != *"No MCP server"* ]]; then
-        err "claude mcp get failed unexpectedly: $mcp_get_err"
-        exit 1
-    fi
 
-    log "registering caveman-shrink MCP server"
-    claude mcp add caveman-shrink -- npx -y caveman-shrink
+    case "${JACKIN_AGENT:-}" in
+        claude)
+            local mcp_err
+            if mcp_err="$(claude mcp get headroom 2>&1 >/dev/null)"; then
+                return 0
+            fi
+            if [[ "$mcp_err" != *"No MCP server"* ]]; then
+                err "claude mcp get headroom failed unexpectedly: $mcp_err"
+                exit 1
+            fi
+            log "registering headroom MCP server for claude"
+            headroom mcp install --quiet 2>/dev/null || \
+                claude mcp add headroom -- headroom mcp serve
+            ;;
+        codex)
+            log "registering headroom MCP server for codex"
+            codex mcp add headroom -- headroom mcp serve 2>/dev/null || true
+            ;;
+        amp)
+            log "registering headroom MCP server for amp"
+            amp mcp add headroom -- headroom mcp serve 2>/dev/null || true
+            ;;
+        opencode|kimi|grok|""|*)
+            ;;
+    esac
 }
 
 verify_codex_caveman_skills() {
@@ -86,12 +85,13 @@ verify_codex_caveman_skills() {
 
 case "${JACKIN_AGENT:-}" in
     claude)
-        register_caveman_shrink
         setup_context7 claude --claude --mcp
+        register_headroom_mcp
         ;;
     codex)
         verify_codex_caveman_skills
         setup_context7 codex --codex --mcp
+        register_headroom_mcp
         ;;
     opencode)
         setup_context7 opencode --opencode --mcp
@@ -102,6 +102,7 @@ case "${JACKIN_AGENT:-}" in
         # `ctx7 docs` directly. grok also has no per-agent step
         # beyond this (uses --always-approve from jackin).
         setup_context7 "$JACKIN_AGENT" --cli --universal
+        register_headroom_mcp
         ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;
     *)      warn "unknown JACKIN_AGENT=${JACKIN_AGENT} — skipping per-agent setup" ;;
