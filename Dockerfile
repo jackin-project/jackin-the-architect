@@ -9,7 +9,9 @@ ARG OPENTOFU_VERSION=1.12.3
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
 ARG CAVEMAN_VERSION=1.9.0
-ARG CTX7_VERSION=0.5.2
+ARG CTX7_VERSION=0.5.3
+# See https://pypi.org/project/headroom-ai/ for the current release.
+ARG HEADROOM_VERSION=0.26.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -93,9 +95,9 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # every event (caveman issue #392 — double CAVEMAN MODE block, double
 # reinforcement line).
 #
-# `--no-mcp-shrink` keeps the caveman-shrink MCP proxy out of this step;
-# `hooks/preflight.sh::register_caveman_shrink` does it at container start
-# where the claude CLI is guaranteed to be on PATH.
+# `--no-mcp-shrink` keeps the caveman-shrink MCP proxy out entirely —
+# shrink required a wired-up upstream MCP server that was never configured
+# (caveman issue #474) and has been dropped from this role.
 #
 # Codex and Amp have no Claude-plugin path, so the caveman skills tree at
 # `${HOME}/.agents/skills/caveman/` is installed via `skills add --global`.
@@ -126,3 +128,53 @@ RUN . ~/.profile && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
+
+# ── Token-optimisation stack ──────────────────────────────────────────────────
+
+# Caveman ultra default for agents that read ~/.config/caveman/config.json.
+# CAVEMAN_DEFAULT_MODE env var (highest priority) is declared in jackin.role.toml.
+# Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
+# (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
+RUN mkdir -p /home/agent/.config/caveman
+COPY --chown=agent:agent --chmod=644 caveman-config.json /home/agent/.config/caveman/config.json
+
+# Agent global-instruction files: single source → every runtime path.
+# Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
+# opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
+# grok: reads ~/.claude/CLAUDE.md natively; covered by the claude COPY below.
+RUN mkdir -p \
+    /home/agent/.claude \
+    /home/agent/.codex \
+    /home/agent/.config/amp \
+    /home/agent/.kimi-code
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.claude/CLAUDE.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.codex/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.config/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.config/amp/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.kimi-code/AGENTS.md
+
+# Headroom: input-side context compression. MCP mode only — the proxy mode
+# conflicts with Claude Code's prompt-cache management.
+# Exposes headroom_compress / headroom_retrieve / headroom_stats as MCP tools.
+# TextCompressor (kompress-base ML model) not explicitly disabled here — no
+# stable config key yet (see chopratejas/headroom). Agent guidance in
+# token-optimization.md covers what to compress; rule-based compressors
+# (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
+# TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
+RUN python3 -m pip install --no-cache-dir --user "headroom-ai[mcp]==${HEADROOM_VERSION}"
+
+# Expose user-installed Python binaries (headroom, etc.) on PATH.
+ENV PATH="/home/agent/.local/bin:${PATH}"
+
+# Bake headroom MCP entry into opencode and kimi configs at build time.
+# Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
+# Codex and Amp handled in hooks/preflight.sh (prefer CLI for idempotency).
+RUN { \
+      printf '%s\n' \
+        "import json,os" \
+        "HOME=os.environ['HOME']" \
+        "oc=json.load(open(HOME+'/.config/opencode/opencode.json'))" \
+        "oc.setdefault('mcp',{})['headroom']={'command':'headroom','args':['mcp','serve']}" \
+        "json.dump(oc,open(HOME+'/.config/opencode/opencode.json','w'),indent=2)" \
+        "json.dump({'mcpServers':{'headroom':{'command':'headroom','args':['mcp','serve']}}},open(HOME+'/.kimi-code/mcp.json','w'),indent=2)"; \
+    } | python3
