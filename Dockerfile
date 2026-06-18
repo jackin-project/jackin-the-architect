@@ -133,23 +133,25 @@ RUN . ~/.profile && \
 
 # Caveman ultra default for agents that read ~/.config/caveman/config.json.
 # CAVEMAN_DEFAULT_MODE env var (highest priority) is declared in jackin.role.toml.
-RUN mkdir -p "${HOME}/.config/caveman"
-COPY --chown=agent:agent caveman-config.json "${HOME}/.config/caveman/config.json"
+# Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
+# (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
+RUN mkdir -p /home/agent/.config/caveman
+COPY --chown=agent:agent caveman-config.json /home/agent/.config/caveman/config.json
 
 # Agent global-instruction files: single source → every runtime path.
 # Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
 # opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
 # grok: reads ~/.claude/CLAUDE.md natively; covered by the claude COPY below.
 RUN mkdir -p \
-    "${HOME}/.claude" \
-    "${HOME}/.codex" \
-    "${HOME}/.config/amp" \
-    "${HOME}/.kimi-code"
-COPY --chown=agent:agent token-optimization.md "${HOME}/.claude/CLAUDE.md"
-COPY --chown=agent:agent token-optimization.md "${HOME}/.codex/AGENTS.md"
-COPY --chown=agent:agent token-optimization.md "${HOME}/.config/AGENTS.md"
-COPY --chown=agent:agent token-optimization.md "${HOME}/.config/amp/AGENTS.md"
-COPY --chown=agent:agent token-optimization.md "${HOME}/.kimi-code/AGENTS.md"
+    /home/agent/.claude \
+    /home/agent/.codex \
+    /home/agent/.config/amp \
+    /home/agent/.kimi-code
+COPY --chown=agent:agent token-optimization.md /home/agent/.claude/CLAUDE.md
+COPY --chown=agent:agent token-optimization.md /home/agent/.codex/AGENTS.md
+COPY --chown=agent:agent token-optimization.md /home/agent/.config/AGENTS.md
+COPY --chown=agent:agent token-optimization.md /home/agent/.config/amp/AGENTS.md
+COPY --chown=agent:agent token-optimization.md /home/agent/.kimi-code/AGENTS.md
 
 # Headroom: input-side context compression. MCP mode only — the proxy mode
 # conflicts with Claude Code's prompt-cache management.
@@ -159,7 +161,7 @@ COPY --chown=agent:agent token-optimization.md "${HOME}/.kimi-code/AGENTS.md"
 # token-optimization.md covers what to compress; rule-based compressors
 # (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
 # TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
-RUN pip install --no-cache-dir "headroom-ai[mcp]==${HEADROOM_VERSION}"
+RUN python3 -m pip install --no-cache-dir "headroom-ai[mcp]==${HEADROOM_VERSION}"
 
 # Bake headroom MCP entry into opencode and kimi configs at build time.
 # Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
