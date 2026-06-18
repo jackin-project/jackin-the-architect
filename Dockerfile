@@ -149,10 +149,10 @@ RUN mkdir -p \
     /home/agent/.config/amp \
     /home/agent/.kimi-code
 COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
-COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.claude/CLAUDE.md
-COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.codex/AGENTS.md
-COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.config/amp/AGENTS.md
-COPY --chown=root:agent --chmod=440 token-optimization.md /home/agent/.kimi-code/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.claude/CLAUDE.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.codex/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.config/amp/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.kimi-code/AGENTS.md
 
 # Headroom: input-side context compression. MCP mode only — the proxy mode
 # conflicts with Claude Code's prompt-cache management.
@@ -183,3 +183,4 @@ RUN . ~/.profile && node -e '\
   fs.writeFileSync(h+"/.config/opencode/opencode.json",JSON.stringify(oc,null,2));\
   fs.writeFileSync(h+"/.kimi-code/mcp.json",JSON.stringify({mcpServers:{headroom:{command:"headroom",args:["mcp","serve"]}}},null,2));\
 '
+
