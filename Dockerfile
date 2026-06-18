@@ -137,7 +137,7 @@ RUN . ~/.profile && \
 # Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
 # (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
 RUN mkdir -p /home/agent/.config/caveman
-COPY --chmod=444 caveman-config.json /home/agent/.config/caveman/config.json
+COPY --chown=agent:agent --chmod=444 caveman-config.json /home/agent/.config/caveman/config.json
 
 # Agent global-instruction files: single source → every runtime path.
 # Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
@@ -148,11 +148,11 @@ RUN mkdir -p \
     /home/agent/.codex \
     /home/agent/.config/amp \
     /home/agent/.kimi-code
-COPY --chmod=444 token-optimization.md /home/agent/.claude/CLAUDE.md
-COPY --chmod=444 token-optimization.md /home/agent/.codex/AGENTS.md
-COPY --chmod=444 token-optimization.md /home/agent/.config/AGENTS.md
-COPY --chmod=444 token-optimization.md /home/agent/.config/amp/AGENTS.md
-COPY --chmod=444 token-optimization.md /home/agent/.kimi-code/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.claude/CLAUDE.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.codex/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.config/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.config/amp/AGENTS.md
+COPY --chown=agent:agent --chmod=444 token-optimization.md /home/agent/.kimi-code/AGENTS.md
 
 # Headroom: input-side context compression. MCP mode only — the proxy mode
 # conflicts with Claude Code's prompt-cache management.
