@@ -141,18 +141,24 @@ RUN . ~/.profile && \
 # Agent global-instruction files: single source → every runtime path.
 # Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
 # opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
-# grok: reads ~/.claude/CLAUDE.md natively; covered by the claude COPY below.
+# grok: loads ~/.grok/AGENTS.md as a global instruction (verified via
+# `grok inspect`). Its own path, not ~/.claude/CLAUDE.md — the per-agent
+# home mount shadows the baked ~/.claude on a grok-only launch, and jackin
+# reseeds only the active agent's home. ~/.grok IS reseeded by setup_grok
+# (jackin snapshots it into default-home), so a grok-owned file survives.
 RUN mkdir -p \
     /home/agent/.config/caveman \
     /home/agent/.claude \
     /home/agent/.codex \
     /home/agent/.config/amp \
-    /home/agent/.kimi-code
+    /home/agent/.kimi-code \
+    /home/agent/.grok
 COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
 COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.claude/CLAUDE.md
 COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.codex/AGENTS.md
 COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.config/amp/AGENTS.md
 COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.kimi-code/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.grok/AGENTS.md
 
 # Headroom: input-side context compression. MCP mode only — the proxy mode
 # conflicts with Claude Code's prompt-cache management.

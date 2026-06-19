@@ -38,7 +38,9 @@ setup_context7() {
 # Headroom exposes headroom_compress / headroom_retrieve / headroom_stats.
 # MCP mode only — proxy mode conflicts with Claude Code's prompt-cache management.
 # opencode / kimi: baked into their JSON configs at image build time.
-# grok: reads ~/.claude/mcp.json written at build time; no registration needed here.
+# grok: registered here via `grok mcp add` (writes ~/.grok/config.toml, which
+# setup_grok reseeds). The earlier "reads ~/.claude/mcp.json" note was wrong —
+# nothing wrote that file, so grok got no headroom at all.
 register_headroom_mcp() {
     if ! command -v headroom >/dev/null 2>&1; then
         warn "headroom not on PATH — skipping MCP registration for ${JACKIN_AGENT:-unknown}"
@@ -67,7 +69,11 @@ register_headroom_mcp() {
             log "registering headroom MCP server for amp"
             amp mcp add headroom -- headroom mcp serve 2>/dev/null || true
             ;;
-        opencode|kimi|grok|""|*)
+        grok)
+            log "registering headroom MCP server for grok"
+            grok mcp add headroom -- headroom mcp serve 2>/dev/null || true
+            ;;
+        opencode|kimi|""|*)
             ;;
     esac
 }
