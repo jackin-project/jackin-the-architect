@@ -3,7 +3,7 @@ FROM projectjackin/construct:0.11-trixie@sha256:821b41aa5942a7d18101ff8eafc8982f
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG CARGO_BINSTALL_VERSION=1.20.0
-ARG OPENTOFU_VERSION=1.12.2
+ARG OPENTOFU_VERSION=1.12.3
 # CAVEMAN_VERSION must be a release tag from
 # https://github.com/JuliusBrussee/caveman/releases — never `main`,
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
