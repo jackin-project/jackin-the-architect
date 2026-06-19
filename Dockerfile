@@ -182,10 +182,14 @@ ENV PATH="/home/agent/.local/bin:${PATH}"
 # Bake headroom MCP entry into opencode and kimi configs at build time.
 # Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
 # Codex and Amp handled in hooks/preflight.sh (prefer CLI for idempotency).
+# opencode uses its OWN MCP schema — {type:"local",command:[…],enabled:true},
+# command as an array — not the standard {command,args}. The wrong shape makes
+# opencode refuse to start ("Configuration is invalid at opencode.json"). kimi
+# uses the standard mcpServers {command,args} shape below.
 RUN . ~/.profile && node -e '\
   const fs=require("fs"),h=process.env.HOME;\
   const oc=JSON.parse(fs.readFileSync(h+"/.config/opencode/opencode.json","utf8"));\
-  (oc.mcp||(oc.mcp={})).headroom={command:"headroom",args:["mcp","serve"]};\
+  (oc.mcp||(oc.mcp={})).headroom={type:"local",command:["headroom","mcp","serve"],enabled:true};\
   fs.writeFileSync(h+"/.config/opencode/opencode.json",JSON.stringify(oc,null,2));\
   fs.writeFileSync(h+"/.kimi-code/mcp.json",JSON.stringify({mcpServers:{headroom:{command:"headroom",args:["mcp","serve"]}}},null,2));\
 '
