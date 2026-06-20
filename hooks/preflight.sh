@@ -126,7 +126,13 @@ case "${JACKIN_AGENT:-}" in
         # ~/.agents/skills/ so the agent invokes `ctx7 library` /
         # `ctx7 docs` directly. grok also has no per-agent step
         # beyond this (uses --always-approve from jackin).
-        setup_context7 "$JACKIN_AGENT" --cli --universal
+        #
+        # `--universal` is NOT a `ctx7 setup` option (it lives on
+        # `ctx7 generate`); passing it makes `setup` abort with
+        # "unknown option '--universal'", which fails this preflight
+        # hook and tears the agent's tab down at startup. `--cli`
+        # alone already installs the universal .agents/skills target.
+        setup_context7 "$JACKIN_AGENT" --cli
         register_headroom_mcp
         ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;

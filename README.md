@@ -50,7 +50,7 @@ Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
 The `hooks/preflight.sh` script runs before the agent CLI starts:
 
-1. **Context7 MCP** — configures the Context7 MCP server for the active agent when `CONTEXT7_API_KEY` is set. Fully non-interactive: passes `--api-key` to `ctx7 setup`, picks the right target per agent (`--claude`/`--codex`/`--opencode` for MCP, `--cli --universal` for amp/kimi/grok), and skips setup entirely when the key is absent (no OAuth device flow). Configure once via operator env with a host reference — `jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'` — then export `CONTEXT7_API_KEY=ctx7sk-...` in the host shell.
+1. **Context7 MCP** — configures the Context7 MCP server for the active agent when `CONTEXT7_API_KEY` is set. Fully non-interactive: passes `--api-key` to `ctx7 setup`, picks the right target per agent (`--claude`/`--codex`/`--opencode` for MCP, `--cli` for amp/kimi/grok), and skips setup entirely when the key is absent (no OAuth device flow). Configure once via operator env with a host reference — `jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'` — then export `CONTEXT7_API_KEY=ctx7sk-...` in the host shell.
 2. **caveman-shrink MCP** — registers caveman-shrink as a Claude MCP middleware (claude agent only, idempotent; fails launch if the claude CLI is missing — see hook header for the contract)
 3. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
 
