@@ -96,6 +96,59 @@ seed_caveman_flag() {
     log "caveman flag seeded: ${flag} → ${mode}"
 }
 
+# Wire the caveman statusline badge ([CAVEMAN:ULTRA]) into Claude Code's
+# settings.json. The caveman *plugin* (registered via the marketplace in
+# jackin.role.toml) ships the /caveman command and the mode-tracker hook
+# that writes .caveman-active — but a Claude Code plugin cannot set
+# `statusLine`; that is a settings.json field. The standalone caveman
+# installer is what normally wires it, and this role deliberately skips it
+# (`install.js --only opencode`) to avoid the double-hook bug (caveman
+# #392). Result: the mode is active but the badge never renders. Wire just
+# the statusLine here — idempotent, and never clobbering an operator's own
+# statusLine.
+wire_caveman_statusline() {
+    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+    local settings="${claude_dir}/settings.json"
+
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not on PATH — cannot wire caveman statusline into ${settings}"
+        return 0
+    fi
+
+    local script
+    script="$(find "${claude_dir}/plugins/marketplaces/caveman" \
+                   "${claude_dir}/plugins/cache/caveman" \
+                   -name caveman-statusline.sh -type f 2>/dev/null | head -n1)"
+    if [[ -z "${script}" ]]; then
+        warn "caveman-statusline.sh not found under ${claude_dir}/plugins — skipping statusline wiring"
+        return 0
+    fi
+
+    mkdir -p "${claude_dir}"
+    [[ -f "${settings}" ]] || printf '{}\n' > "${settings}"
+
+    # Preserve an operator-set statusLine; only wire (or refresh) ours.
+    local current
+    current="$(jq -r '.statusLine.command // ""' "${settings}" 2>/dev/null || echo "")"
+    if [[ -n "${current}" && "${current}" != *caveman-statusline.sh* ]]; then
+        log "operator statusLine present — leaving it untouched"
+        return 0
+    fi
+
+    local command="bash ${script}"
+    local tmp
+    tmp="$(mktemp "${claude_dir}/.settings.json.XXXXXX")"
+    if jq --arg cmd "${command}" \
+          '.statusLine = {"type": "command", "command": $cmd}' \
+          "${settings}" > "${tmp}"; then
+        mv "${tmp}" "${settings}"
+        log "caveman statusline wired: ${command}"
+    else
+        rm -f "${tmp}"
+        warn "failed to update ${settings} with caveman statusline"
+    fi
+}
+
 verify_codex_caveman_skills() {
     if [[ -f "${HOME}/.agents/skills/caveman/SKILL.md" ]]; then
         log "codex caveman skills present in ${HOME}/.agents/skills"
@@ -110,6 +163,7 @@ verify_codex_caveman_skills() {
 case "${JACKIN_AGENT:-}" in
     claude)
         seed_caveman_flag
+        wire_caveman_statusline
         setup_context7 claude --claude --mcp
         register_headroom_mcp
         ;;
