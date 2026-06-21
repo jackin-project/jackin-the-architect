@@ -233,3 +233,13 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # aggregate metrics regardless of any future consent state.
 ENV RTK_TELEMETRY_DISABLED=1
 
+# opencode RTK auto-rewrite. opencode has no Claude-style PreToolUse hook, but
+# it loads global plugins from ~/.config/opencode/plugins/ (same dir caveman's
+# native plugin installs into, above). RTK's vendored opencode plugin gives
+# opencode the same shell-output compression via `tool.execute.before` ->
+# `rtk rewrite`. Vendored (not `rtk init --agent opencode`, which is interactive
+# and writes more than the plugin) and pinned by review; the file is a stable
+# shim whose logic lives in the rtk binary. Self-disables if rtk is absent.
+COPY --chown=agent:agent --chmod=644 hooks/opencode/rtk.ts /home/agent/.config/opencode/plugins/rtk.ts
+RUN test -s /home/agent/.config/opencode/plugins/rtk.ts
+
