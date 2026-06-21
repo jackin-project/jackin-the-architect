@@ -10,6 +10,25 @@ log()  { printf '[architect-preflight] %s\n' "$*"; }
 warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
+# Atomically apply a jq program to a JSON file, seeding {} when absent.
+# Args: file, then the jq arguments (filter plus any --arg pairs). Writes via
+# a sibling temp file + mv so a jq failure leaves the original untouched.
+# Returns non-zero (leaving the original in place) if jq fails. Callers log.
+json_set() {
+    local file="$1"; shift
+    local dir; dir="$(dirname "${file}")"
+    mkdir -p "${dir}"
+    [[ -f "${file}" ]] || printf '{}\n' > "${file}"
+
+    local tmp; tmp="$(mktemp "${dir}/.$(basename "${file}").XXXXXX")"
+    if jq "$@" "${file}" > "${tmp}"; then
+        mv "${tmp}" "${file}"
+        return 0
+    fi
+    rm -f "${tmp}"
+    return 1
+}
+
 # Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
 # Without an API key the launch is treated as Context7-disabled — no
 # OAuth device flow is attempted (operators run headlessly and OAuth
@@ -56,80 +75,50 @@ register_headroom_mcp() {
             headroom mcp install --quiet 2>/dev/null || \
                 claude mcp add headroom -- headroom mcp serve
             ;;
-        codex)
-            log "registering headroom MCP server for codex"
-            codex mcp add headroom -- headroom mcp serve 2>/dev/null || true
+        codex|amp|grok)
+            # Native `<cli> mcp add` is idempotent; tolerate a duplicate-add error.
+            log "registering headroom MCP server for ${JACKIN_AGENT}"
+            "${JACKIN_AGENT}" mcp add headroom -- headroom mcp serve 2>/dev/null || true
             ;;
-        amp)
-            log "registering headroom MCP server for amp"
-            amp mcp add headroom -- headroom mcp serve 2>/dev/null || true
-            ;;
-        grok)
-            log "registering headroom MCP server for grok"
-            grok mcp add headroom -- headroom mcp serve 2>/dev/null || true
-            ;;
-        opencode)
-            log "registering headroom MCP server for opencode"
-            patch_headroom_json opencode
-            ;;
-        kimi)
-            log "registering headroom MCP server for kimi"
-            patch_headroom_json kimi
-            ;;
-        ""|*)
+        opencode|kimi)
+            # No `mcp add` CLI — patch the agent's JSON config directly.
+            log "registering headroom MCP server for ${JACKIN_AGENT}"
+            patch_headroom_json "${JACKIN_AGENT}"
             ;;
     esac
 }
 
+# Merge a headroom MCP entry into an agent's JSON config via json_set
+# (jq-based; no separate node dependency).
 patch_headroom_json() {
     local target="$1"
+    local file filter
 
-    if ! command -v node >/dev/null 2>&1; then
-        warn "node not on PATH — cannot patch headroom MCP for ${target}"
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not on PATH — cannot patch headroom MCP for ${target}"
         return 0
     fi
 
-    TARGET="${target}" node <<'NODE'
-const fs = require("fs");
-const path = require("path");
+    case "${target}" in
+        opencode)
+            file="${HOME}/.config/opencode/opencode.json"
+            filter='.mcp.headroom = {"type":"local","command":["headroom","mcp","serve"],"enabled":true}'
+            ;;
+        kimi)
+            file="${HOME}/.kimi-code/mcp.json"
+            filter='.mcpServers.headroom = {"command":"headroom","args":["mcp","serve"]}'
+            ;;
+        *)
+            warn "patch_headroom_json: unknown target ${target}"
+            return 0
+            ;;
+    esac
 
-const home = process.env.HOME;
-const target = process.env.TARGET;
-
-function readJson(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function writeJson(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-if (target === "opencode") {
-  const file = path.join(home, ".config/opencode/opencode.json");
-  const config = readJson(file);
-  config.mcp ||= {};
-  config.mcp.headroom = {
-    type: "local",
-    command: ["headroom", "mcp", "serve"],
-    enabled: true,
-  };
-  writeJson(file, config);
-} else if (target === "kimi") {
-  const file = path.join(home, ".kimi-code/mcp.json");
-  const config = readJson(file);
-  config.mcpServers ||= {};
-  config.mcpServers.headroom = {
-    command: "headroom",
-    args: ["mcp", "serve"],
-  };
-  writeJson(file, config);
-}
-NODE
+    if json_set "${file}" "${filter}"; then
+        log "headroom MCP entry written to ${file}"
+    else
+        warn "failed to patch headroom MCP into ${file}"
+    fi
 }
 
 # Write the caveman-active flag file for agents that use the Claude Code
@@ -169,6 +158,19 @@ wire_caveman_statusline() {
         return 0
     fi
 
+    # Decide up front whether there's anything to do, before the recursive
+    # find — on a persisted-home relaunch the statusLine is already ours.
+    local current=""
+    [[ -f "${settings}" ]] && \
+        current="$(jq -r '.statusLine.command // ""' "${settings}" 2>/dev/null || echo "")"
+    if [[ "${current}" == *caveman-statusline.sh* ]]; then
+        return 0
+    fi
+    if [[ -n "${current}" ]]; then
+        log "operator statusLine present — leaving it untouched"
+        return 0
+    fi
+
     local script
     script="$(find "${claude_dir}/plugins/marketplaces/caveman" \
                    "${claude_dir}/plugins/cache/caveman" \
@@ -178,27 +180,12 @@ wire_caveman_statusline() {
         return 0
     fi
 
-    mkdir -p "${claude_dir}"
-    [[ -f "${settings}" ]] || printf '{}\n' > "${settings}"
-
-    # Preserve an operator-set statusLine; only wire (or refresh) ours.
-    local current
-    current="$(jq -r '.statusLine.command // ""' "${settings}" 2>/dev/null || echo "")"
-    if [[ -n "${current}" && "${current}" != *caveman-statusline.sh* ]]; then
-        log "operator statusLine present — leaving it untouched"
-        return 0
-    fi
-
     local command="bash ${script}"
-    local tmp
-    tmp="$(mktemp "${claude_dir}/.settings.json.XXXXXX")"
-    if jq --arg cmd "${command}" \
-          '.statusLine = {"type": "command", "command": $cmd}' \
-          "${settings}" > "${tmp}"; then
-        mv "${tmp}" "${settings}"
+    if json_set "${settings}" \
+          --arg cmd "${command}" \
+          '.statusLine = {"type": "command", "command": $cmd}'; then
         log "caveman statusline wired: ${command}"
     else
-        rm -f "${tmp}"
         warn "failed to update ${settings} with caveman statusline"
     fi
 }
