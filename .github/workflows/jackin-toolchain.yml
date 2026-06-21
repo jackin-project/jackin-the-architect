@@ -12,6 +12,8 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-24.04
+    env:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
@@ -22,7 +24,7 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ env.RENOVATE_TOKEN }}
           branch: renovate/jackin-toolchain
           delete-branch: true
           title: "build: update jackin toolchain"
