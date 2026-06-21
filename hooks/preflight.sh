@@ -149,6 +149,69 @@ wire_caveman_statusline() {
     fi
 }
 
+# Wire RTK's auto-rewrite PreToolUse hook into Claude Code's settings.json.
+# RTK compresses shell-command output (cargo/git/build/test/log) at the Bash
+# tool boundary — deterministic, no model, cache-safe, exit codes preserved.
+# The hook rewrites `git status` -> `rtk git status` before execution, so the
+# agent receives compact output without knowing RTK is involved.
+#
+# We deliberately do NOT run `rtk init -g`: it is interactive (a telemetry
+# consent prompt) and rewrites settings.json wholesale, which races/clobbers
+# caveman's own hook + statusline registration — the exact two-tools-one-
+# settings hazard the token-optimisation research flags. Instead we jq-merge
+# the single hook entry `rtk init` would add (verified against
+# rtk-ai/rtk src/hooks/init.rs::insert_hook_entry):
+#   {"matcher":"Bash","hooks":[{"type":"command","command":"rtk hook claude"}]}
+# under .hooks.PreToolUse — idempotently, never touching an existing hook.
+# The native `rtk hook claude` command self-guards (exits 0 silently if rtk is
+# missing / older than 0.23.0 / the command does not match), so the entry is
+# harmless even if rtk is unavailable at runtime.
+#
+# claude only: codex/amp/kimi/grok have no Claude-style PreToolUse hook (RTK
+# auto-rewrite is claude-only upstream); they get `rtk` on PATH plus the
+# manual-prefix guidance in token-optimization.md. opencode auto-rewrite (RTK's
+# native TS plugin) is a deliberate follow-up, not wired here.
+register_rtk_hook() {
+    if ! command -v rtk >/dev/null 2>&1; then
+        warn "rtk not on PATH — skipping RTK hook registration for claude"
+        return 0
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not on PATH — cannot wire RTK hook into Claude settings.json"
+        return 0
+    fi
+
+    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+    local settings="${claude_dir}/settings.json"
+    mkdir -p "${claude_dir}"
+    [[ -f "${settings}" ]] || printf '{}\n' > "${settings}"
+
+    # Idempotent: skip if an RTK Bash hook is already present (native
+    # `rtk hook claude` command or the legacy rtk-rewrite.sh script path).
+    if jq -e '[.hooks.PreToolUse[]?.hooks[]?.command // ""]
+              | any(test("rtk hook claude|rtk-rewrite\\.sh"))' \
+          "${settings}" >/dev/null 2>&1; then
+        log "RTK hook already present in ${settings}"
+        return 0
+    fi
+
+    local tmp
+    tmp="$(mktemp "${claude_dir}/.settings.json.XXXXXX")"
+    if jq '.hooks //= {}
+           | .hooks.PreToolUse //= []
+           | .hooks.PreToolUse += [{
+               "matcher": "Bash",
+               "hooks": [{"type": "command", "command": "rtk hook claude"}]
+             }]' \
+          "${settings}" > "${tmp}"; then
+        mv "${tmp}" "${settings}"
+        log "RTK auto-rewrite hook wired into ${settings}"
+    else
+        rm -f "${tmp}"
+        warn "failed to wire RTK hook into ${settings}"
+    fi
+}
+
 verify_codex_caveman_skills() {
     if [[ -f "${HOME}/.agents/skills/caveman/SKILL.md" ]]; then
         log "codex caveman skills present in ${HOME}/.agents/skills"
@@ -164,6 +227,7 @@ case "${JACKIN_AGENT:-}" in
     claude)
         seed_caveman_flag
         wire_caveman_statusline
+        register_rtk_hook
         setup_context7 claude --claude --mcp
         register_headroom_mcp
         ;;

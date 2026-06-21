@@ -72,6 +72,17 @@
       "packageNameTemplate": "astral-sh/uv",
       "extractVersionTemplate": "^(?<version>.+)$",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/"
+      ],
+      "matchStrings": ["ARG RTK_VERSION=(?<currentValue>[\\d.]+)"],
+      "datasourceTemplate": "github-releases",
+      "packageNameTemplate": "rtk-ai/rtk",
+      "extractVersionTemplate": "^v(?<version>.+)$",
+      "versioningTemplate": "semver"
     }
   ],
   "prHourlyLimit": 0,

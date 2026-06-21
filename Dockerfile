@@ -14,6 +14,13 @@ ARG CTX7_VERSION=0.5.3
 ARG HEADROOM_VERSION=0.26.0
 # See https://github.com/astral-sh/uv/releases for the current release.
 ARG UV_VERSION=0.11.21
+# RTK (rtk-ai/rtk) — deterministic shell-output compressor. See
+# https://github.com/rtk-ai/rtk/releases for the current stable (v-prefixed)
+# release; the `dev-*-rc.N` prereleases are intentionally not tracked.
+# NOTE: crates.io `rtk` is a DIFFERENT package (Rust Type Kit) — never
+# `cargo install rtk`. mise resolves the name via the aqua backend to the
+# rtk-ai/rtk prebuilt binary, the same prebuilt path used for ast-grep/uv.
+ARG RTK_VERSION=0.42.4
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -176,8 +183,11 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 
 RUN . ~/.profile && uv tool install "headroom-ai[mcp]==${HEADROOM_VERSION}"
 
-# Expose uv tool binaries (headroom, etc.) on PATH.
-ENV PATH="/home/agent/.local/bin:${PATH}"
+# Expose uv tool binaries (headroom, etc.) and mise shims (rtk, etc.) on PATH.
+# The mise shims dir is added explicitly — not left to `mise activate` in
+# ~/.profile — so `rtk` resolves inside Claude Code's PreToolUse hook
+# subprocess (which does not source the login profile) and for every runtime.
+ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
 
 # Bake headroom MCP entry into opencode and kimi configs at build time.
 # Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
@@ -193,4 +203,33 @@ RUN . ~/.profile && node -e '\
   fs.writeFileSync(h+"/.config/opencode/opencode.json",JSON.stringify(oc,null,2));\
   fs.writeFileSync(h+"/.kimi-code/mcp.json",JSON.stringify({mcpServers:{headroom:{command:"headroom",args:["mcp","serve"]}}},null,2));\
 '
+
+# RTK: deterministic shell-output compressor (rtk-ai/rtk). Compresses
+# cargo/git/clippy/build/test/log output at the Bash tool boundary — the
+# largest concrete input slice for a Rust agent — with NO model in the loop
+# (RTK's defining trait vs headroom's kompress-base ML stage) and cache-safe
+# by construction (compresses the observation before it is ever cached).
+# Complementary, not redundant, with headroom: RTK owns shell output, headroom
+# owns native reads / RAG / history. They intercept at different points and
+# measure additive. Do NOT also adopt lean-ctx's shell hook (one shell path).
+#
+# mise/aqua pulls the prebuilt binary (no source compile; crates.io `rtk` is a
+# different package — see ARG note). The mise shims dir is on PATH (above), so
+# `rtk` resolves for every runtime and inside Claude's hook subprocess.
+#
+# The PreToolUse hook that makes rewrites automatic is wired per-launch in
+# hooks/preflight.sh::register_rtk_hook (claude only — the claude CLI and its
+# settings.json exist only at container start). It is NOT wired here: `rtk init`
+# is interactive (telemetry-consent prompt) and rewrites settings.json
+# wholesale, which would clobber caveman's hook + statusline registration.
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise install "rtk@${RTK_VERSION}" && \
+    mise use -g --pin "rtk@${RTK_VERSION}"
+
+# RTK telemetry is opt-in (disabled by default, GDPR consent-gated); set the
+# documented kill-switch explicitly so a security-conscious image never sends
+# aggregate metrics regardless of any future consent state.
+ENV RTK_TELEMETRY_DISABLED=1
 
