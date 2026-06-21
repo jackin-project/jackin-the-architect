@@ -34,13 +34,8 @@ setup_context7() {
     fi
 }
 
-# Register headroom as an MCP server for the active agent.
-# Headroom exposes headroom_compress / headroom_retrieve / headroom_stats.
-# MCP mode only — proxy mode conflicts with Claude Code's prompt-cache management.
-# opencode / kimi: baked into their JSON configs at image build time.
-# grok: registered here via `grok mcp add` (writes ~/.grok/config.toml, which
-# setup_grok reseeds). The earlier "reads ~/.claude/mcp.json" note was wrong —
-# nothing wrote that file, so grok got no headroom at all.
+# Register headroom as an MCP server for the active agent. Keep this in
+# preflight: jackin's runtime setup may rewrite agent configs before this hook.
 register_headroom_mcp() {
     if ! command -v headroom >/dev/null 2>&1; then
         warn "headroom not on PATH — skipping MCP registration for ${JACKIN_AGENT:-unknown}"
@@ -73,9 +68,68 @@ register_headroom_mcp() {
             log "registering headroom MCP server for grok"
             grok mcp add headroom -- headroom mcp serve 2>/dev/null || true
             ;;
-        opencode|kimi|""|*)
+        opencode)
+            log "registering headroom MCP server for opencode"
+            patch_headroom_json opencode
+            ;;
+        kimi)
+            log "registering headroom MCP server for kimi"
+            patch_headroom_json kimi
+            ;;
+        ""|*)
             ;;
     esac
+}
+
+patch_headroom_json() {
+    local target="$1"
+
+    if ! command -v node >/dev/null 2>&1; then
+        warn "node not on PATH — cannot patch headroom MCP for ${target}"
+        return 0
+    fi
+
+    TARGET="${target}" node <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const home = process.env.HOME;
+const target = process.env.TARGET;
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+if (target === "opencode") {
+  const file = path.join(home, ".config/opencode/opencode.json");
+  const config = readJson(file);
+  config.mcp ||= {};
+  config.mcp.headroom = {
+    type: "local",
+    command: ["headroom", "mcp", "serve"],
+    enabled: true,
+  };
+  writeJson(file, config);
+} else if (target === "kimi") {
+  const file = path.join(home, ".kimi-code/mcp.json");
+  const config = readJson(file);
+  config.mcpServers ||= {};
+  config.mcpServers.headroom = {
+    command: "headroom",
+    args: ["mcp", "serve"],
+  };
+  writeJson(file, config);
+}
+NODE
 }
 
 # Write the caveman-active flag file for agents that use the Claude Code
@@ -213,6 +267,7 @@ case "${JACKIN_AGENT:-}" in
         ;;
     opencode)
         setup_context7 opencode --opencode --mcp
+        register_headroom_mcp
         ;;
     amp|kimi|grok)
         # No native MCP target — install the docs skill under

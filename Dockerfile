@@ -189,21 +189,6 @@ RUN . ~/.profile && uv tool install "headroom-ai[mcp]==${HEADROOM_VERSION}"
 # subprocess (which does not source the login profile) and for every runtime.
 ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
 
-# Bake headroom MCP entry into opencode and kimi configs at build time.
-# Claude and Grok handled in hooks/preflight.sh (claude CLI not available here).
-# Codex and Amp handled in hooks/preflight.sh (prefer CLI for idempotency).
-# opencode uses its OWN MCP schema — {type:"local",command:[…],enabled:true},
-# command as an array — not the standard {command,args}. The wrong shape makes
-# opencode refuse to start ("Configuration is invalid at opencode.json"). kimi
-# uses the standard mcpServers {command,args} shape below.
-RUN . ~/.profile && node -e '\
-  const fs=require("fs"),h=process.env.HOME;\
-  const oc=JSON.parse(fs.readFileSync(h+"/.config/opencode/opencode.json","utf8"));\
-  (oc.mcp||(oc.mcp={})).headroom={type:"local",command:["headroom","mcp","serve"],enabled:true};\
-  fs.writeFileSync(h+"/.config/opencode/opencode.json",JSON.stringify(oc,null,2));\
-  fs.writeFileSync(h+"/.kimi-code/mcp.json",JSON.stringify({mcpServers:{headroom:{command:"headroom",args:["mcp","serve"]}}},null,2));\
-'
-
 # RTK: deterministic shell-output compressor (rtk-ai/rtk). Compresses
 # cargo/git/clippy/build/test/log output at the Bash tool boundary — the
 # largest concrete input slice for a Rust agent — with NO model in the loop
@@ -241,10 +226,9 @@ ENV RTK_TELEMETRY_DISABLED=1
 # `rtk rewrite`) there. Non-interactive at build time: rtk's consent prompts are
 # gated on a TTY (none here) and telemetry is disabled via RTK_TELEMETRY_DISABLED.
 # Writes ONLY the plugin file (run_opencode_only_mode) — it does not patch
-# opencode.json, so it is order-independent of the headroom MCP patch above.
+# opencode.json, so headroom MCP registration stays owned by preflight.
 # Installing natively (vs vendoring the .ts) keeps the plugin matched to the
 # pinned binary, so a RTK_VERSION bump refreshes it automatically.
 RUN . ~/.profile && \
     rtk init -g --opencode && \
     test -f /home/agent/.config/opencode/plugins/rtk.ts
-
