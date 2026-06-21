@@ -149,66 +149,41 @@ wire_caveman_statusline() {
     fi
 }
 
-# Wire RTK's auto-rewrite PreToolUse hook into Claude Code's settings.json.
-# RTK compresses shell-command output (cargo/git/build/test/log) at the Bash
-# tool boundary — deterministic, no model, cache-safe, exit codes preserved.
-# The hook rewrites `git status` -> `rtk git status` before execution, so the
-# agent receives compact output without knowing RTK is involved.
+# Register RTK's auto-rewrite PreToolUse hook for Claude Code, natively and
+# non-interactively. RTK compresses shell-command output (cargo/git/build/test/
+# log) at the Bash tool boundary — deterministic, no model, cache-safe, exit
+# codes preserved. The hook rewrites `git status` -> `rtk git status` before
+# execution, so the agent receives compact output without knowing RTK is there.
 #
-# We deliberately do NOT run `rtk init -g`: it is interactive (a telemetry
-# consent prompt) and rewrites settings.json wholesale, which races/clobbers
-# caveman's own hook + statusline registration — the exact two-tools-one-
-# settings hazard the token-optimisation research flags. Instead we jq-merge
-# the single hook entry `rtk init` would add (verified against
-# rtk-ai/rtk src/hooks/init.rs::insert_hook_entry):
-#   {"matcher":"Bash","hooks":[{"type":"command","command":"rtk hook claude"}]}
-# under .hooks.PreToolUse — idempotently, never touching an existing hook.
-# The native `rtk hook claude` command self-guards (exits 0 silently if rtk is
-# missing / older than 0.23.0 / the command does not match), so the entry is
-# harmless even if rtk is unavailable at runtime.
+# `rtk init -g`:
+#   --hook-only  : write ONLY the hook — no RTK.md / CLAUDE.md patch (we own the
+#                  guidance file token-optimization.md).
+#   --auto-patch : patch settings.json without a TTY prompt. Required here:
+#                  without it, rtk detects the non-interactive shell and defaults
+#                  to "no patch" (src/hooks/init.rs::prompt_user_consent), so the
+#                  hook would silently never install.
 #
-# claude only: codex/amp/kimi/grok have no Claude-style PreToolUse hook (RTK
-# auto-rewrite is claude-only upstream); they get `rtk` on PATH plus the
-# manual-prefix guidance in token-optimization.md. opencode auto-rewrite (RTK's
-# native TS plugin) is a deliberate follow-up, not wired here.
+# Native install is the upstream-blessed path and is safe alongside caveman:
+# rtk APPENDS to .hooks.PreToolUse (preserving caveman's hooks AND statusLine),
+# backs up settings.json.bak before patching, honors CLAUDE_CONFIG_DIR, and is
+# idempotent (skips when its hook is already present). It also keeps the hook
+# command shape version-matched to the binary across RTK_VERSION bumps — which a
+# hand-merged JSON entry would not. Telemetry stays off (RTK_TELEMETRY_DISABLED
+# + the consent prompt is TTY-gated).
+#
+# claude only: codex/amp/kimi/grok have no RTK PreToolUse hook. codex's own
+# native RTK mode is AGENTS.md instructions (and cannot combine with
+# --auto-patch), which token-optimization.md already provides non-interactively;
+# amp/kimi/grok are unsupported upstream and rely on the same manual-prefix
+# guidance. opencode is wired natively at image build (`rtk init -g --opencode`).
 register_rtk_hook() {
     if ! command -v rtk >/dev/null 2>&1; then
         warn "rtk not on PATH — skipping RTK hook registration for claude"
         return 0
     fi
-    if ! command -v jq >/dev/null 2>&1; then
-        warn "jq not on PATH — cannot wire RTK hook into Claude settings.json"
-        return 0
-    fi
-
-    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
-    local settings="${claude_dir}/settings.json"
-    mkdir -p "${claude_dir}"
-    [[ -f "${settings}" ]] || printf '{}\n' > "${settings}"
-
-    # Idempotent: skip if an RTK Bash hook is already present (native
-    # `rtk hook claude` command or the legacy rtk-rewrite.sh script path).
-    if jq -e '[.hooks.PreToolUse[]?.hooks[]?.command // ""]
-              | any(test("rtk hook claude|rtk-rewrite\\.sh"))' \
-          "${settings}" >/dev/null 2>&1; then
-        log "RTK hook already present in ${settings}"
-        return 0
-    fi
-
-    local tmp
-    tmp="$(mktemp "${claude_dir}/.settings.json.XXXXXX")"
-    if jq '.hooks //= {}
-           | .hooks.PreToolUse //= []
-           | .hooks.PreToolUse += [{
-               "matcher": "Bash",
-               "hooks": [{"type": "command", "command": "rtk hook claude"}]
-             }]' \
-          "${settings}" > "${tmp}"; then
-        mv "${tmp}" "${settings}"
-        log "RTK auto-rewrite hook wired into ${settings}"
-    else
-        rm -f "${tmp}"
-        warn "failed to wire RTK hook into ${settings}"
+    log "registering RTK hook for claude (rtk init -g --hook-only --auto-patch)"
+    if ! rtk init -g --hook-only --auto-patch; then
+        warn "rtk init failed — RTK auto-rewrite hook not registered for claude"
     fi
 }
 

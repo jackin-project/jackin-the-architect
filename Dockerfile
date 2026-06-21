@@ -226,20 +226,25 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "rtk@${RTK_VERSION}" && \
-    mise use -g --pin "rtk@${RTK_VERSION}"
+    mise use -g --pin "rtk@${RTK_VERSION}" && \
+    mise exec -- rtk --version
 
 # RTK telemetry is opt-in (disabled by default, GDPR consent-gated); set the
 # documented kill-switch explicitly so a security-conscious image never sends
 # aggregate metrics regardless of any future consent state.
 ENV RTK_TELEMETRY_DISABLED=1
 
-# opencode RTK auto-rewrite. opencode has no Claude-style PreToolUse hook, but
-# it loads global plugins from ~/.config/opencode/plugins/ (same dir caveman's
-# native plugin installs into, above). RTK's vendored opencode plugin gives
-# opencode the same shell-output compression via `tool.execute.before` ->
-# `rtk rewrite`. Vendored (not `rtk init --agent opencode`, which is interactive
-# and writes more than the plugin) and pinned by review; the file is a stable
-# shim whose logic lives in the rtk binary. Self-disables if rtk is absent.
-COPY --chown=agent:agent --chmod=644 hooks/opencode/rtk.ts /home/agent/.config/opencode/plugins/rtk.ts
-RUN test -s /home/agent/.config/opencode/plugins/rtk.ts
+# opencode RTK auto-rewrite, installed natively via `rtk init -g --opencode`.
+# opencode has no Claude-style PreToolUse hook, but it loads global plugins from
+# ~/.config/opencode/plugins/ (the same dir caveman's native plugin uses). rtk
+# writes its own version-matched opencode plugin (tool.execute.before ->
+# `rtk rewrite`) there. Non-interactive at build time: rtk's consent prompts are
+# gated on a TTY (none here) and telemetry is disabled via RTK_TELEMETRY_DISABLED.
+# Writes ONLY the plugin file (run_opencode_only_mode) — it does not patch
+# opencode.json, so it is order-independent of the headroom MCP patch above.
+# Installing natively (vs vendoring the .ts) keeps the plugin matched to the
+# pinned binary, so a RTK_VERSION bump refreshes it automatically.
+RUN . ~/.profile && \
+    rtk init -g --opencode && \
+    test -f /home/agent/.config/opencode/plugins/rtk.ts
 
