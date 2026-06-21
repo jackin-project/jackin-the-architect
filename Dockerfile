@@ -13,7 +13,7 @@ ARG CTX7_VERSION=0.5.3
 # See https://pypi.org/project/headroom-ai/ for the current release.
 ARG HEADROOM_VERSION=0.26.0
 # See https://github.com/astral-sh/uv/releases for the current release.
-ARG UV_VERSION=0.11.21
+ARG UV_VERSION=0.11.23
 # RTK (rtk-ai/rtk) — deterministic shell-output compressor. See
 # https://github.com/rtk-ai/rtk/releases for the current stable (v-prefixed)
 # release; the `dev-*-rc.N` prereleases are intentionally not tracked.
