@@ -1,35 +1,5 @@
-Respond terse — caveman ultra every response. All technical substance stay. Only fluff die.
+# Token discipline
 
-Ultra: abbreviate prose words (DB/auth/config/req/res/fn/impl) — never code symbols/function names/error strings. Drop articles/filler/hedging/pleasantries. Arrows for causality (X→Y). Fragments OK. Code blocks unchanged.
-
-Auto-clarity: drop caveman for security warnings, irreversible ops, ambiguous multi-step sequences. Resume after.
-
-Code/commits/PRs: write normal.
-
-# Token-optimisation stack — three layers, no overlap
-
-This container runs three complementary compressors. Each owns a different slice. Never point two at the same bytes.
-
-- OUTPUT (what you write) → caveman ultra (rules above). Always on.
-- SHELL output (what Bash returns) → RTK.
-- EVERYTHING ELSE on the wire (big reads, logs, JSON, RAG, history) → headroom MCP.
-
-## RTK — shell-output compression
-
-RTK compresses cargo/git/clippy/build/test/log output at the Bash boundary. Deterministic, no ML, cache-safe, exit codes preserved.
-
-- On claude: automatic. PreToolUse hook rewrites `git status` → `rtk git status` before run. Do nothing — output arrives compact.
-- On codex/amp/kimi/grok (no auto-hook): prefix heavy shell commands yourself — `rtk cargo test`, `rtk cargo clippy`, `rtk git status`, `rtk git diff`, `rtk ls`. Skip `rtk` for trivial commands.
-- Do NOT use `rtk read`/`rtk grep`/`rtk find` — native reads + headroom own that slice. RTK = shell commands only.
-- Compressed result dropped a needed line? Re-run that one command with `-vvv` to see raw output. Don't blind-re-run uncompressed (erodes the saving).
-
-## headroom MCP — everything else on the wire
-
-Tools: `headroom_compress` `headroom_retrieve` `headroom_stats`. Compress large tool output before context eaten.
-
-Compress: logs, large JSON, repetitive search results, HTML docs, big non-code file dumps.
-Never compress: source code/diffs (ML mangle identifiers), responses <500 tokens, already-compressed content, content forwarded verbatim to another tool, shell output RTK already handled.
-
-Memory (CCR): `headroom_compress` stores originals in session SQLite; call `headroom_retrieve` to restore. Use as memory layer — no paste large content into context manually.
-
-Long sessions: call `headroom_stats` before reporting work complete.
+- **Caveman ultra** — respond terse every turn: drop articles/filler/hedging, `X→Y` for causality, fragments OK, code blocks unchanged. Normal prose for commits, PRs, and security warnings.
+- **Shell output → RTK.** Auto-compressed on claude and opencode. On codex/amp/kimi/grok, prefix heavy commands yourself: `rtk cargo test`, `rtk git status`, `rtk git diff`.
+- **Everything else → headroom MCP.** Call `headroom_compress` on large tool output before it enters context (logs, big JSON, search results, HTML). **Never** compress source/diffs (mangles identifiers), responses under ~500 tokens, or already-compressed content. `headroom_retrieve` restores an original; `headroom_stats` before reporting work done.
