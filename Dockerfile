@@ -9,7 +9,18 @@ ARG OPENTOFU_VERSION=1.12.3
 # never a raw commit SHA. The `skills` CLI's shallow git-clone fetch
 # resolves tags but not arbitrary SHAs.
 ARG CAVEMAN_VERSION=1.9.0
-ARG CTX7_VERSION=0.5.2
+ARG CTX7_VERSION=0.5.3
+# See https://pypi.org/project/headroom-ai/ for the current release.
+ARG HEADROOM_VERSION=0.26.0
+# See https://github.com/astral-sh/uv/releases for the current release.
+ARG UV_VERSION=0.11.21
+# RTK (rtk-ai/rtk) — deterministic shell-output compressor. See
+# https://github.com/rtk-ai/rtk/releases for the current stable (v-prefixed)
+# release; the `dev-*-rc.N` prereleases are intentionally not tracked.
+# NOTE: crates.io `rtk` is a DIFFERENT package (Rust Type Kit) — never
+# `cargo install rtk`. mise resolves the name via the aqua backend to the
+# rtk-ai/rtk prebuilt binary, the same prebuilt path used for ast-grep/uv.
+ARG RTK_VERSION=0.42.4
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -93,9 +104,9 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # every event (caveman issue #392 — double CAVEMAN MODE block, double
 # reinforcement line).
 #
-# `--no-mcp-shrink` keeps the caveman-shrink MCP proxy out of this step;
-# `hooks/preflight.sh::register_caveman_shrink` does it at container start
-# where the claude CLI is guaranteed to be on PATH.
+# `--no-mcp-shrink` keeps the caveman-shrink MCP proxy out entirely —
+# shrink required a wired-up upstream MCP server that was never configured
+# (caveman issue #474) and has been dropped from this role.
 #
 # Codex and Amp have no Claude-plugin path, so the caveman skills tree at
 # `${HOME}/.agents/skills/caveman/` is installed via `skills add --global`.
@@ -126,3 +137,98 @@ RUN . ~/.profile && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
+
+# ── Token-optimisation stack ──────────────────────────────────────────────────
+
+# Caveman ultra default for agents that read ~/.config/caveman/config.json.
+# CAVEMAN_DEFAULT_MODE env var (highest priority) is declared in jackin.role.toml.
+# Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
+# (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
+#
+# Agent global-instruction files: single source → every runtime path.
+# Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
+# opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
+# grok: loads ~/.grok/AGENTS.md as a global instruction (verified via
+# `grok inspect`). Its own path, not ~/.claude/CLAUDE.md — the per-agent
+# home mount shadows the baked ~/.claude on a grok-only launch, and jackin
+# reseeds only the active agent's home. ~/.grok IS reseeded by setup_grok
+# (jackin snapshots it into default-home), so a grok-owned file survives.
+RUN mkdir -p \
+    /home/agent/.config/caveman \
+    /home/agent/.claude \
+    /home/agent/.codex \
+    /home/agent/.config/amp \
+    /home/agent/.kimi-code \
+    /home/agent/.grok
+COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.claude/CLAUDE.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.codex/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.config/amp/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.kimi-code/AGENTS.md
+COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.grok/AGENTS.md
+
+# Headroom: input-side context compression. MCP mode only — the proxy mode
+# conflicts with Claude Code's prompt-cache management.
+# Exposes headroom_compress / headroom_retrieve / headroom_stats as MCP tools.
+# TextCompressor (kompress-base ML model) not explicitly disabled here — no
+# stable config key yet (see chopratejas/headroom). Agent guidance in
+# token-optimization.md covers what to compress; rule-based compressors
+# (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
+# TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise install "uv@${UV_VERSION}" && \
+    mise use -g --pin "uv@${UV_VERSION}"
+
+RUN . ~/.profile && uv tool install "headroom-ai[mcp]==${HEADROOM_VERSION}"
+
+# Expose uv tool binaries (headroom, etc.) and mise shims (rtk, etc.) on PATH.
+# The mise shims dir is added explicitly — not left to `mise activate` in
+# ~/.profile — so `rtk` resolves inside Claude Code's PreToolUse hook
+# subprocess (which does not source the login profile) and for every runtime.
+ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
+
+# RTK: deterministic shell-output compressor (rtk-ai/rtk). Compresses
+# cargo/git/clippy/build/test/log output at the Bash tool boundary — the
+# largest concrete input slice for a Rust agent — with NO model in the loop
+# (RTK's defining trait vs headroom's kompress-base ML stage) and cache-safe
+# by construction (compresses the observation before it is ever cached).
+# Complementary, not redundant, with headroom: RTK owns shell output, headroom
+# owns native reads / RAG / history. They intercept at different points and
+# measure additive. Do NOT also adopt lean-ctx's shell hook (one shell path).
+#
+# mise/aqua pulls the prebuilt binary (no source compile; crates.io `rtk` is a
+# different package — see ARG note). The mise shims dir is on PATH (above), so
+# `rtk` resolves for every runtime and inside Claude's hook subprocess.
+#
+# The PreToolUse hook that makes rewrites automatic is wired per-launch in
+# hooks/preflight.sh::register_rtk_hook (claude only — the claude CLI and its
+# settings.json exist only at container start). It is NOT wired here: `rtk init`
+# is interactive (telemetry-consent prompt) and rewrites settings.json
+# wholesale, which would clobber caveman's hook + statusline registration.
+RUN --mount=type=secret,id=github_token,uid=1000,required=false \
+    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
+    mise install "rtk@${RTK_VERSION}" && \
+    mise use -g --pin "rtk@${RTK_VERSION}" && \
+    mise exec -- rtk --version
+
+# RTK telemetry is opt-in (disabled by default, GDPR consent-gated); set the
+# documented kill-switch explicitly so a security-conscious image never sends
+# aggregate metrics regardless of any future consent state.
+ENV RTK_TELEMETRY_DISABLED=1
+
+# opencode RTK auto-rewrite, installed natively via `rtk init -g --opencode`.
+# opencode has no Claude-style PreToolUse hook, but it loads global plugins from
+# ~/.config/opencode/plugins/ (the same dir caveman's native plugin uses). rtk
+# writes its own version-matched opencode plugin (tool.execute.before ->
+# `rtk rewrite`) there. Non-interactive at build time: rtk's consent prompts are
+# gated on a TTY (none here) and telemetry is disabled via RTK_TELEMETRY_DISABLED.
+# Writes ONLY the plugin file (run_opencode_only_mode) — it does not patch
+# opencode.json, so headroom MCP registration stays owned by preflight.
+# Installing natively (vs vendoring the .ts) keeps the plugin matched to the
+# pinned binary, so a RTK_VERSION bump refreshes it automatically.
+RUN . ~/.profile && \
+    rtk init -g --opencode && \
+    test -f /home/agent/.config/opencode/plugins/rtk.ts

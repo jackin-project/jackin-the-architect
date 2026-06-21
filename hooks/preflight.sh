@@ -10,6 +10,25 @@ log()  { printf '[architect-preflight] %s\n' "$*"; }
 warn() { printf '[architect-preflight] WARNING: %s\n' "$*" >&2; }
 err()  { printf '[architect-preflight] ERROR: %s\n'   "$*" >&2; }
 
+# Atomically apply a jq program to a JSON file, seeding {} when absent.
+# Args: file, then the jq arguments (filter plus any --arg pairs). Writes via
+# a sibling temp file + mv so a jq failure leaves the original untouched.
+# Returns non-zero (leaving the original in place) if jq fails. Callers log.
+json_set() {
+    local file="$1"; shift
+    local dir; dir="$(dirname "${file}")"
+    mkdir -p "${dir}"
+    [[ -f "${file}" ]] || printf '{}\n' > "${file}"
+
+    local tmp; tmp="$(mktemp "${dir}/.$(basename "${file}").XXXXXX")"
+    if jq "$@" "${file}" > "${tmp}"; then
+        mv "${tmp}" "${file}"
+        return 0
+    fi
+    rm -f "${tmp}"
+    return 1
+}
+
 # Configure Context7 for the active agent when CONTEXT7_API_KEY is set.
 # Without an API key the launch is treated as Context7-disabled — no
 # OAuth device flow is attempted (operators run headlessly and OAuth
@@ -34,43 +53,179 @@ setup_context7() {
     fi
 }
 
-# caveman-shrink wraps another MCP server's stdio and compresses the
-# responses to cut token cost. The registration here is a placeholder
-# — wire it to a real upstream by editing the `mcpServers` entry to
-# append the upstream after the caveman-shrink arg list, e.g.:
-#
-#   {
-#     "mcpServers": {
-#       "fs-shrunk": {
-#         "command": "npx",
-#         "args": ["caveman-shrink", "npx",
-#                  "@modelcontextprotocol/server-filesystem", "/path"]
-#       }
-#     }
-#   }
-#
-# Reference: https://github.com/JuliusBrussee/caveman/tree/main/mcp-servers/caveman-shrink
-register_caveman_shrink() {
-    # JACKIN_AGENT=claude is contracted to mean the claude CLI is on
-    # PATH; a missing binary here is a contract violation, not a skip.
-    if ! command -v claude >/dev/null 2>&1; then
-        err "JACKIN_AGENT=claude but claude CLI not on PATH — jackin runtime contract violated"
-        exit 1
-    fi
-
-    # Capture stderr so the benign "No MCP server with name …" case
-    # is distinguished from a real auth/parse/crash error.
-    local mcp_get_err
-    if mcp_get_err="$(claude mcp get caveman-shrink 2>&1 >/dev/null)"; then
+# Register headroom as an MCP server for the active agent. Keep this in
+# preflight: jackin's runtime setup may rewrite agent configs before this hook.
+register_headroom_mcp() {
+    if ! command -v headroom >/dev/null 2>&1; then
+        warn "headroom not on PATH — skipping MCP registration for ${JACKIN_AGENT:-unknown}"
         return 0
     fi
-    if [[ "$mcp_get_err" != *"No MCP server"* ]]; then
-        err "claude mcp get failed unexpectedly: $mcp_get_err"
-        exit 1
+
+    case "${JACKIN_AGENT:-}" in
+        claude)
+            local mcp_err
+            if mcp_err="$(claude mcp get headroom 2>&1 >/dev/null)"; then
+                return 0
+            fi
+            if [[ "$mcp_err" != *"No MCP server"* ]]; then
+                err "claude mcp get headroom failed unexpectedly: $mcp_err"
+                exit 1
+            fi
+            log "registering headroom MCP server for claude"
+            headroom mcp install --quiet 2>/dev/null || \
+                claude mcp add headroom -- headroom mcp serve
+            ;;
+        codex|amp|grok)
+            # Native `<cli> mcp add` is idempotent; tolerate a duplicate-add error.
+            log "registering headroom MCP server for ${JACKIN_AGENT}"
+            "${JACKIN_AGENT}" mcp add headroom -- headroom mcp serve 2>/dev/null || true
+            ;;
+        opencode|kimi)
+            # No `mcp add` CLI — patch the agent's JSON config directly.
+            log "registering headroom MCP server for ${JACKIN_AGENT}"
+            patch_headroom_json "${JACKIN_AGENT}"
+            ;;
+    esac
+}
+
+# Merge a headroom MCP entry into an agent's JSON config via json_set
+# (jq-based; no separate node dependency).
+patch_headroom_json() {
+    local target="$1"
+    local file filter
+
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not on PATH — cannot patch headroom MCP for ${target}"
+        return 0
     fi
 
-    log "registering caveman-shrink MCP server"
-    claude mcp add caveman-shrink -- npx -y caveman-shrink
+    case "${target}" in
+        opencode)
+            file="${HOME}/.config/opencode/opencode.json"
+            filter='.mcp.headroom = {"type":"local","command":["headroom","mcp","serve"],"enabled":true}'
+            ;;
+        kimi)
+            file="${HOME}/.kimi-code/mcp.json"
+            filter='.mcpServers.headroom = {"command":"headroom","args":["mcp","serve"]}'
+            ;;
+        *)
+            warn "patch_headroom_json: unknown target ${target}"
+            return 0
+            ;;
+    esac
+
+    if json_set "${file}" "${filter}"; then
+        log "headroom MCP entry written to ${file}"
+    else
+        warn "failed to patch headroom MCP into ${file}"
+    fi
+}
+
+# Write the caveman-active flag file for agents that use the Claude Code
+# plugin hook system (caveman-mode-tracker.js reads this on every
+# UserPromptSubmit). Writing here ensures the flag exists before the
+# first prompt, so caveman is active from turn 1 — not from turn 2
+# after the SessionStart hook has fired and been processed.
+#
+# CAVEMAN_DEFAULT_MODE is already set to "ultra" via jackin.role.toml.
+# printf (not echo) avoids a trailing newline that would make readFlag
+# return null (the whitelist check trims, but belt-and-suspenders).
+seed_caveman_flag() {
+    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+    local flag="${claude_dir}/.caveman-active"
+    local mode="${CAVEMAN_DEFAULT_MODE:-ultra}"
+    mkdir -p "${claude_dir}"
+    printf '%s' "${mode}" > "${flag}"
+    log "caveman flag seeded: ${flag} → ${mode}"
+}
+
+# Wire the caveman statusline badge ([CAVEMAN:ULTRA]) into Claude Code's
+# settings.json. The caveman *plugin* (registered via the marketplace in
+# jackin.role.toml) ships the /caveman command and the mode-tracker hook
+# that writes .caveman-active — but a Claude Code plugin cannot set
+# `statusLine`; that is a settings.json field. The standalone caveman
+# installer is what normally wires it, and this role deliberately skips it
+# (`install.js --only opencode`) to avoid the double-hook bug (caveman
+# #392). Result: the mode is active but the badge never renders. Wire just
+# the statusLine here — idempotent, and never clobbering an operator's own
+# statusLine.
+wire_caveman_statusline() {
+    local claude_dir="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+    local settings="${claude_dir}/settings.json"
+
+    if ! command -v jq >/dev/null 2>&1; then
+        warn "jq not on PATH — cannot wire caveman statusline into ${settings}"
+        return 0
+    fi
+
+    # Decide up front whether there's anything to do, before the recursive
+    # find — on a persisted-home relaunch the statusLine is already ours.
+    local current=""
+    [[ -f "${settings}" ]] && \
+        current="$(jq -r '.statusLine.command // ""' "${settings}" 2>/dev/null || echo "")"
+    if [[ "${current}" == *caveman-statusline.sh* ]]; then
+        return 0
+    fi
+    if [[ -n "${current}" ]]; then
+        log "operator statusLine present — leaving it untouched"
+        return 0
+    fi
+
+    local script
+    script="$(find "${claude_dir}/plugins/marketplaces/caveman" \
+                   "${claude_dir}/plugins/cache/caveman" \
+                   -name caveman-statusline.sh -type f 2>/dev/null | head -n1)"
+    if [[ -z "${script}" ]]; then
+        warn "caveman-statusline.sh not found under ${claude_dir}/plugins — skipping statusline wiring"
+        return 0
+    fi
+
+    local command="bash ${script}"
+    if json_set "${settings}" \
+          --arg cmd "${command}" \
+          '.statusLine = {"type": "command", "command": $cmd}'; then
+        log "caveman statusline wired: ${command}"
+    else
+        warn "failed to update ${settings} with caveman statusline"
+    fi
+}
+
+# Register RTK's auto-rewrite PreToolUse hook for Claude Code, natively and
+# non-interactively. RTK compresses shell-command output (cargo/git/build/test/
+# log) at the Bash tool boundary — deterministic, no model, cache-safe, exit
+# codes preserved. The hook rewrites `git status` -> `rtk git status` before
+# execution, so the agent receives compact output without knowing RTK is there.
+#
+# `rtk init -g`:
+#   --hook-only  : write ONLY the hook — no RTK.md / CLAUDE.md patch (we own the
+#                  guidance file token-optimization.md).
+#   --auto-patch : patch settings.json without a TTY prompt. Required here:
+#                  without it, rtk detects the non-interactive shell and defaults
+#                  to "no patch" (src/hooks/init.rs::prompt_user_consent), so the
+#                  hook would silently never install.
+#
+# Native install is the upstream-blessed path and is safe alongside caveman:
+# rtk APPENDS to .hooks.PreToolUse (preserving caveman's hooks AND statusLine),
+# backs up settings.json.bak before patching, honors CLAUDE_CONFIG_DIR, and is
+# idempotent (skips when its hook is already present). It also keeps the hook
+# command shape version-matched to the binary across RTK_VERSION bumps — which a
+# hand-merged JSON entry would not. Telemetry stays off (RTK_TELEMETRY_DISABLED
+# + the consent prompt is TTY-gated).
+#
+# claude only: codex/amp/kimi/grok have no RTK PreToolUse hook. codex's own
+# native RTK mode is AGENTS.md instructions (and cannot combine with
+# --auto-patch), which token-optimization.md already provides non-interactively;
+# amp/kimi/grok are unsupported upstream and rely on the same manual-prefix
+# guidance. opencode is wired natively at image build (`rtk init -g --opencode`).
+register_rtk_hook() {
+    if ! command -v rtk >/dev/null 2>&1; then
+        warn "rtk not on PATH — skipping RTK hook registration for claude"
+        return 0
+    fi
+    log "registering RTK hook for claude (rtk init -g --hook-only --auto-patch)"
+    if ! rtk init -g --hook-only --auto-patch; then
+        warn "rtk init failed — RTK auto-rewrite hook not registered for claude"
+    fi
 }
 
 verify_codex_caveman_skills() {
@@ -86,22 +241,34 @@ verify_codex_caveman_skills() {
 
 case "${JACKIN_AGENT:-}" in
     claude)
-        register_caveman_shrink
+        seed_caveman_flag
+        wire_caveman_statusline
+        register_rtk_hook
         setup_context7 claude --claude --mcp
+        register_headroom_mcp
         ;;
     codex)
         verify_codex_caveman_skills
         setup_context7 codex --codex --mcp
+        register_headroom_mcp
         ;;
     opencode)
         setup_context7 opencode --opencode --mcp
+        register_headroom_mcp
         ;;
     amp|kimi|grok)
         # No native MCP target — install the docs skill under
         # ~/.agents/skills/ so the agent invokes `ctx7 library` /
         # `ctx7 docs` directly. grok also has no per-agent step
         # beyond this (uses --always-approve from jackin).
-        setup_context7 "$JACKIN_AGENT" --cli --universal
+        #
+        # `--universal` is NOT a `ctx7 setup` option (it lives on
+        # `ctx7 generate`); passing it makes `setup` abort with
+        # "unknown option '--universal'", which fails this preflight
+        # hook and tears the agent's tab down at startup. `--cli`
+        # alone already installs the universal .agents/skills target.
+        setup_context7 "$JACKIN_AGENT" --cli
+        register_headroom_mcp
         ;;
     "")     warn "JACKIN_AGENT unset — skipping per-agent setup" ;;
     *)      warn "unknown JACKIN_AGENT=${JACKIN_AGENT} — skipping per-agent setup" ;;

@@ -22,7 +22,7 @@ In a Codex session, caveman is delivered through Codex skills under `~/.agents/s
 
 Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and contains only its `[tools]` entries; comments, settings, and task definitions are intentionally omitted. [`jackin-toolchain/rust-toolchain.toml`](jackin-toolchain/rust-toolchain.toml) is copied from upstream as-is so Rust is installed from Jackin's tested toolchain file. Refresh both with `mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
 
-Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`, `HEADROOM_VERSION`, `UV_VERSION`, `RTK_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
 
 - **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml`
 - **Rust** (via mise) with clippy, rustfmt, rust-analyzer
@@ -32,6 +32,8 @@ Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTA
 - **OpenTofu** (via mise)
 - **Context7** (npm) — up-to-date library docs via MCP
 - **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)
+- **Headroom** (uv tool) — MCP tools for compressing large context inputs
+- **RTK** (mise/aqua) — deterministic shell-output compression
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
 
 Shared shell/runtime tools come from `projectjackin/construct:trixie`.
@@ -50,9 +52,10 @@ Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
 The `hooks/preflight.sh` script runs before the agent CLI starts:
 
-1. **Context7 MCP** — configures the Context7 MCP server for the active agent when `CONTEXT7_API_KEY` is set. Fully non-interactive: passes `--api-key` to `ctx7 setup`, picks the right target per agent (`--claude`/`--codex`/`--opencode` for MCP, `--cli --universal` for amp/kimi/grok), and skips setup entirely when the key is absent (no OAuth device flow). Configure once via operator env with a host reference — `jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'` — then export `CONTEXT7_API_KEY=ctx7sk-...` in the host shell.
-2. **caveman-shrink MCP** — registers caveman-shrink as a Claude MCP middleware (claude agent only, idempotent; fails launch if the claude CLI is missing — see hook header for the contract)
-3. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
+1. **Context7 MCP** — configures the Context7 MCP server for the active agent when `CONTEXT7_API_KEY` is set. Fully non-interactive: passes `--api-key` to `ctx7 setup`, picks the right target per agent (`--claude`/`--codex`/`--opencode` for MCP, `--cli` for amp/kimi/grok), and skips setup entirely when the key is absent (no OAuth device flow). Configure once via operator env with a host reference — `jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'` — then export `CONTEXT7_API_KEY=ctx7sk-...` in the host shell.
+2. **Headroom MCP** — registers `headroom mcp serve` for the active agent after jackin's runtime setup has created or refreshed agent config files.
+3. **Claude token hooks** — seeds caveman ultra mode, wires the caveman statusline, and registers RTK's shell-output rewrite hook.
+4. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
 
 ## PR workflow
 
