@@ -141,12 +141,14 @@ RUN . ~/.profile && \
 # ── Token-optimisation stack ──────────────────────────────────────────────────
 
 # Caveman ultra default for agents that read ~/.config/caveman/config.json.
-# CAVEMAN_DEFAULT_MODE env var (highest priority) is declared in jackin.role.toml.
+# CAVEMAN_DEFAULT_MODE env var (highest priority) is baked into the container
+# and also declared in jackin.role.toml for jackin-managed launches.
 # Use /home/agent/ prefix — ${HOME} does not expand in COPY destinations
 # (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
 #
-# Agent global-instruction files: single source → every runtime path.
-# Real files, not symlinks — Codex refuses symlinked config dirs (codex#11314).
+# Agent global-instruction files: AGENTS.md.d/*.md snippets are merged into
+# canonical root files, then linked into every runtime path.
+# Config directories stay real — Codex refuses symlinked config dirs (codex#11314).
 # opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
 # grok: loads ~/.grok/AGENTS.md as a global instruction (verified via
 # `grok inspect`). Its own path, not ~/.claude/CLAUDE.md — the per-agent
@@ -160,19 +162,25 @@ RUN mkdir -p \
     /home/agent/.config/amp \
     /home/agent/.kimi-code \
     /home/agent/.grok
+ENV CAVEMAN_DEFAULT_MODE=ultra
 COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
-COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.claude/CLAUDE.md
-COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.codex/AGENTS.md
-COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.config/amp/AGENTS.md
-COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.kimi-code/AGENTS.md
-COPY --chown=agent:agent --chmod=644 token-optimization.md /home/agent/.grok/AGENTS.md
+COPY --chown=agent:agent --chmod=644 AGENTS.md.d/ /tmp/AGENTS.md.d/
+RUN find /tmp/AGENTS.md.d -maxdepth 1 -type f -name '*.md' | sort | \
+    while IFS= read -r file; do cat "${file}"; printf '\n'; done > /tmp/AGENTS.md && \
+    install -m 0644 /tmp/AGENTS.md /home/agent/AGENTS.md && \
+    install -m 0644 /tmp/AGENTS.md /home/agent/CLAUDE.md && \
+    ln -sf /home/agent/CLAUDE.md /home/agent/.claude/CLAUDE.md && \
+    ln -sf /home/agent/AGENTS.md /home/agent/.codex/AGENTS.md && \
+    ln -sf /home/agent/AGENTS.md /home/agent/.config/amp/AGENTS.md && \
+    ln -sf /home/agent/AGENTS.md /home/agent/.kimi-code/AGENTS.md && \
+    ln -sf /home/agent/AGENTS.md /home/agent/.grok/AGENTS.md
 
 # Headroom: input-side context compression. MCP mode only — the proxy mode
 # conflicts with Claude Code's prompt-cache management.
 # Exposes headroom_compress / headroom_retrieve / headroom_stats as MCP tools.
 # TextCompressor (kompress-base ML model) not explicitly disabled here — no
 # stable config key yet (see chopratejas/headroom). Agent guidance in
-# token-optimization.md covers what to compress; rule-based compressors
+# AGENTS.md.d/token-tools.md covers what to compress; rule-based compressors
 # (LogCompressor, SmartCrusher, SearchCompressor) are what the guidance enables.
 # TODO(token-opt): add explicit kompress-base=off once headroom ships a config key.
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \

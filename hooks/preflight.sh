@@ -127,7 +127,8 @@ patch_headroom_json() {
 # first prompt, so caveman is active from turn 1 — not from turn 2
 # after the SessionStart hook has fired and been processed.
 #
-# CAVEMAN_DEFAULT_MODE is already set to "ultra" via jackin.role.toml.
+# CAVEMAN_DEFAULT_MODE is already set to "ultra" by the Dockerfile and
+# jackin.role.toml.
 # printf (not echo) avoids a trailing newline that would make readFlag
 # return null (the whitelist check trims, but belt-and-suspenders).
 seed_caveman_flag() {
@@ -198,7 +199,7 @@ wire_caveman_statusline() {
 #
 # `rtk init -g`:
 #   --hook-only  : write ONLY the hook — no RTK.md / CLAUDE.md patch (we own the
-#                  guidance file token-optimization.md).
+#                  guidance snippets under AGENTS.md.d/).
 #   --auto-patch : patch settings.json without a TTY prompt. Required here:
 #                  without it, rtk detects the non-interactive shell and defaults
 #                  to "no patch" (src/hooks/init.rs::prompt_user_consent), so the
@@ -214,7 +215,7 @@ wire_caveman_statusline() {
 #
 # claude only: codex/amp/kimi/grok have no RTK PreToolUse hook. codex's own
 # native RTK mode is AGENTS.md instructions (and cannot combine with
-# --auto-patch), which token-optimization.md already provides non-interactively;
+# --auto-patch), which AGENTS.md.d/token-tools.md already provides non-interactively;
 # amp/kimi/grok are unsupported upstream and rely on the same manual-prefix
 # guidance. opencode is wired natively at image build (`rtk init -g --opencode`).
 register_rtk_hook() {
