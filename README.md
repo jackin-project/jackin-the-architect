@@ -33,7 +33,7 @@ Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTA
 - **Context7** (npm) — up-to-date library docs via MCP
 - **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)
 - **Headroom** (uv tool) — MCP tools for compressing large context inputs
-- **RTK** (mise/aqua) — deterministic shell-output compression
+- **RTK** (mise/aqua) — deterministic shell-output compression for Claude and OpenCode, plus Codex global instructions
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
 
 Shared shell/runtime tools come from `projectjackin/construct:trixie`.
@@ -54,7 +54,7 @@ The `hooks/preflight.sh` script runs before the agent CLI starts:
 
 1. **Context7 MCP** — configures the Context7 MCP server for the active agent when `CONTEXT7_API_KEY` is set. Fully non-interactive: passes `--api-key` to `ctx7 setup`, picks the right target per agent (`--claude`/`--codex`/`--opencode` for MCP, `--cli` for amp/kimi/grok), and skips setup entirely when the key is absent (no OAuth device flow). Configure once via operator env with a host reference — `jackin config env set CONTEXT7_API_KEY '${CONTEXT7_API_KEY}'` — then export `CONTEXT7_API_KEY=ctx7sk-...` in the host shell.
 2. **Headroom MCP** — registers `headroom mcp serve` for the active agent after jackin's runtime setup has created or refreshed agent config files.
-3. **Claude token hooks** — seeds caveman ultra mode, wires the caveman statusline, and registers RTK's shell-output rewrite hook.
+3. **Token hooks and instructions** — Claude seeds caveman ultra mode, wires the caveman statusline, and registers RTK's shell-output rewrite hook. OpenCode gets RTK's native plugin at image build, and Codex gets RTK's `~/.codex/RTK.md` instructions at image build.
 4. **Codex caveman skills check** — fails launch if `~/.agents/skills/caveman/SKILL.md` is missing (codex agent only); a missing file means the image was built wrong
 
 ## PR workflow

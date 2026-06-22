@@ -213,11 +213,11 @@ wire_caveman_statusline() {
 # hand-merged JSON entry would not. Telemetry stays off (RTK_TELEMETRY_DISABLED
 # + the consent prompt is TTY-gated).
 #
-# claude only: codex/amp/kimi/grok have no RTK PreToolUse hook. codex's own
-# native RTK mode is AGENTS.md instructions (and cannot combine with
-# --auto-patch), which AGENTS.md.d/token-tools.md already provides non-interactively;
-# amp/kimi/grok are unsupported upstream and rely on the same manual-prefix
-# guidance. opencode is wired natively at image build (`rtk init -g --opencode`).
+# claude only: codex/amp/kimi/grok have no RTK PreToolUse hook. Codex's own
+# native RTK mode is `rtk init -g --codex`, installed at image build after the
+# Codex AGENTS.md wrapper is created. amp/kimi/grok are unsupported upstream and
+# rely on the shared manual-prefix guidance. opencode is wired natively at image
+# build (`rtk init -g --opencode`).
 register_rtk_hook() {
     if ! command -v rtk >/dev/null 2>&1; then
         warn "rtk not on PATH — skipping RTK hook registration for claude"

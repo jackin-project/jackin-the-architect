@@ -147,8 +147,11 @@ RUN . ~/.profile && \
 # (only ENV/ARG vars do; HOME is set by the OS, not an ENV instruction).
 #
 # Agent global-instruction files: AGENTS.md.d/*.md snippets are merged into
-# canonical root files, then linked into every runtime path.
+# canonical root files, then linked into most runtime paths.
 # Config directories stay real — Codex refuses symlinked config dirs (codex#11314).
+# Codex gets a tiny wrapper file instead of a symlink so `rtk init -g --codex`
+# can add its standard RTK.md include without mutating every agent's shared
+# /home/agent/AGENTS.md.
 # opencode: plugin owns ~/.config/opencode/AGENTS.md; do not COPY here.
 # grok: loads ~/.grok/AGENTS.md as a global instruction (verified via
 # `grok inspect`). Its own path, not ~/.claude/CLAUDE.md — the per-agent
@@ -170,7 +173,7 @@ RUN find /tmp/AGENTS.md.d -maxdepth 1 -type f -name '*.md' | sort | \
     install -m 0644 /tmp/AGENTS.md /home/agent/AGENTS.md && \
     install -m 0644 /tmp/AGENTS.md /home/agent/CLAUDE.md && \
     ln -sf /home/agent/CLAUDE.md /home/agent/.claude/CLAUDE.md && \
-    ln -sf /home/agent/AGENTS.md /home/agent/.codex/AGENTS.md && \
+    printf '@/home/agent/AGENTS.md\n' > /home/agent/.codex/AGENTS.md && \
     ln -sf /home/agent/AGENTS.md /home/agent/.config/amp/AGENTS.md && \
     ln -sf /home/agent/AGENTS.md /home/agent/.kimi-code/AGENTS.md && \
     ln -sf /home/agent/AGENTS.md /home/agent/.grok/AGENTS.md
@@ -206,26 +209,32 @@ ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
 # owns native reads / RAG / history. They intercept at different points and
 # measure additive. Do NOT also adopt lean-ctx's shell hook (one shell path).
 #
+# RTK telemetry is opt-in (disabled by default, GDPR consent-gated); set the
+# documented kill-switch before any `rtk init` call so a security-conscious image
+# never sends aggregate metrics regardless of any future consent state.
+ENV RTK_TELEMETRY_DISABLED=1
+#
 # mise/aqua pulls the prebuilt binary (no source compile; crates.io `rtk` is a
 # different package — see ARG note). The mise shims dir is on PATH (above), so
 # `rtk` resolves for every runtime and inside Claude's hook subprocess.
 #
-# The PreToolUse hook that makes rewrites automatic is wired per-launch in
-# hooks/preflight.sh::register_rtk_hook (claude only — the claude CLI and its
-# settings.json exist only at container start). It is NOT wired here: `rtk init`
-# is interactive (telemetry-consent prompt) and rewrites settings.json
-# wholesale, which would clobber caveman's hook + statusline registration.
+# The Claude PreToolUse hook that makes rewrites automatic is wired per-launch
+# in hooks/preflight.sh::register_rtk_hook (the claude CLI and settings.json
+# exist only at container start). It is NOT wired here: `rtk init -g` patches
+# settings.json and would race caveman's hook + statusline registration.
+#
+# Codex's upstream RTK mode is instruction-based, so run the native Codex
+# initializer at build time. The Codex AGENTS.md wrapper above keeps the
+# generated RTK.md include scoped to Codex instead of every runtime.
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     mise install "rtk@${RTK_VERSION}" && \
     mise use -g --pin "rtk@${RTK_VERSION}" && \
-    mise exec -- rtk --version
-
-# RTK telemetry is opt-in (disabled by default, GDPR consent-gated); set the
-# documented kill-switch explicitly so a security-conscious image never sends
-# aggregate metrics regardless of any future consent state.
-ENV RTK_TELEMETRY_DISABLED=1
+    mise exec -- rtk --version && \
+    rtk init -g --codex && \
+    test -f /home/agent/.codex/RTK.md && \
+    grep -Fx '@/home/agent/.codex/RTK.md' /home/agent/.codex/AGENTS.md
 
 # opencode RTK auto-rewrite, installed natively via `rtk init -g --opencode`.
 # opencode has no Claude-style PreToolUse hook, but it loads global plugins from
