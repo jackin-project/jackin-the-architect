@@ -11,7 +11,7 @@ ARG OPENTOFU_VERSION=1.12.3
 ARG CAVEMAN_VERSION=1.9.0
 ARG CTX7_VERSION=0.5.3
 # See https://pypi.org/project/headroom-ai/ for the current release.
-ARG HEADROOM_VERSION=0.26.0
+ARG HEADROOM_VERSION=0.27.0
 # See https://github.com/astral-sh/uv/releases for the current release.
 ARG UV_VERSION=0.11.23
 # RTK (rtk-ai/rtk) — deterministic shell-output compressor. See
