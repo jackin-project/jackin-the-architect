@@ -21,12 +21,10 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let source_url = env::var("JACKIN_MISE_URL").unwrap_or_else(|_| DEFAULT_SOURCE_URL.to_string());
-    let rust_toolchain_url =
-        env::var("JACKIN_RUST_TOOLCHAIN_URL").unwrap_or_else(|_| DEFAULT_RUST_TOOLCHAIN_URL.to_string());
+    let rust_toolchain_url = env::var("JACKIN_RUST_TOOLCHAIN_URL")
+        .unwrap_or_else(|_| DEFAULT_RUST_TOOLCHAIN_URL.to_string());
     let mut args = env::args().skip(1);
-    let output = args
-        .next()
-        .unwrap_or_else(|| DEFAULT_OUTPUT.to_string());
+    let output = args.next().unwrap_or_else(|| DEFAULT_OUTPUT.to_string());
     let rust_toolchain_output = args
         .next()
         .unwrap_or_else(|| DEFAULT_RUST_TOOLCHAIN_OUTPUT.to_string());
@@ -87,8 +85,30 @@ fn extract_tools(source: &str) -> Result<String, String> {
 
     let mut output = String::from("[tools]\n");
     output.push_str(&tool_lines.join("\n"));
+    normalize_cross_arch_cargo_tools(&mut output);
     output.push('\n');
     Ok(output)
+}
+
+fn normalize_cross_arch_cargo_tools(output: &mut String) {
+    *output = output
+        .lines()
+        .map(|line| {
+            let Some(version) = line
+                .trim()
+                .strip_prefix("\"cargo:cargo-fuzz\" = ")
+                .and_then(|value| value.strip_prefix('"'))
+                .and_then(|value| value.strip_suffix('"'))
+            else {
+                return line.to_string();
+            };
+
+            format!(
+                "\"cargo:cargo-fuzz\" = {{ version = \"{version}\", default-features = false }}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
 }
 
 fn write_output(output: &str, contents: &str) -> Result<(), String> {
