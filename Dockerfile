@@ -52,8 +52,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     mise trust /tmp/jackin-mise/mise.toml && \
     mkdir -p "${HOME}/.config/mise" && \
     cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
-    # the cp replaces the global config and unpins cargo-binstall, leaving an
-    # orphaned shim that exits 1; re-pin so `mise install` binstalls cargo: tools
+    : "Keep cargo-binstall pinned before installing Cargo-backed mise tools" && \
     mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
     mise install -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise rust && \

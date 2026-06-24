@@ -10,7 +10,7 @@ Threat surface for this image:
 
 1. **Plugin breadth.** Compromised plugin = full access. Trust anchors: caveman (tagged), rust-best-practices. First-party jackin-dev skills installed via skills add.
 2. **OpenTofu credential adjacency.** An operator running this image against `jackin-github-terraform` exports `GITHUB_TOKEN` with org-admin scope into the shell. Anything the agent does (any plugin, any skill) can see that token via `/proc/*/environ`.
-3. **Rust cargo tools.** `jackin-toolchain/mise.toml` installs several `cargo:*` tools generated from Jackin's upstream `mise.toml`, and Architect additionally installs `cargo-watch` and `lychee` through `cargo-binstall`. Root tool versions are pinned where Jackin pins them; Architect-only cargo helpers are not version-pinned by this repo.
+3. **Rust cargo tools.** `jackin-toolchain/mise.toml` installs Jackin's Cargo-backed tools through short mise aliases mapped to `cargo:*`, with `cargo.binstall = true` so prebuilt binaries are preferred and source builds remain the fallback. Architect additionally installs `cargo-watch` and `lychee` through `cargo-binstall`. Root tool versions are pinned where Jackin pins them; Architect-only cargo helpers are not version-pinned by this repo.
 4. **Supply chain.** mise, cargo, npm, PyPI, GitHub refs, etc.
 5. **Context7 MCP.** Optional `CONTEXT7_API_KEY` configures a third-party MCP server with read access to the agent's docs corpus. Treat the key like any other credential — do not commit, do not bake into the image.
 6. **Base image supply chain.** `projectjackin/construct:<version>-trixie` is pinned by digest in the Dockerfile. Whoever can push to `projectjackin/construct` still serves the base image, so digest refreshes require review.

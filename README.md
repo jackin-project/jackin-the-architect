@@ -20,11 +20,11 @@ In a Codex session, caveman is delivered through Codex skills under `~/.agents/s
 
 ## Environment
 
-Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and contains only its `[tools]` entries; comments, settings, and task definitions are intentionally omitted. [`jackin-toolchain/rust-toolchain.toml`](jackin-toolchain/rust-toolchain.toml) is copied from upstream as-is so Rust is installed from Jackin's tested toolchain file. Refresh both with `mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
+Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and keeps its tool pins plus the Cargo backend aliases/settings needed to install Rust tools through `cargo-binstall`. Comments and task definitions are intentionally omitted. [`jackin-toolchain/rust-toolchain.toml`](jackin-toolchain/rust-toolchain.toml) is copied from upstream as-is so Rust is installed from Jackin's tested toolchain file. Refresh both with `mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
 
 Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`, `HEADROOM_VERSION`, `UV_VERSION`, `RTK_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
 
-- **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml`
+- **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml` installed through `cargo-binstall`
 - **Rust** (via mise) with clippy, rustfmt, rust-analyzer
 - **Cargo helper tools**: cargo-watch and lychee
 - **Node.js** (via mise)

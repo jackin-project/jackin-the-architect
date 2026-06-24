@@ -59,56 +59,125 @@ fn download(source_url: &str) -> Result<String, String> {
 }
 
 fn extract_tools(source: &str) -> Result<String, String> {
-    let mut in_tools = false;
-    let mut tool_lines = Vec::new();
-
-    for line in source.lines() {
-        let trimmed = line.trim();
-
-        if trimmed == "[tools]" {
-            in_tools = true;
-            continue;
-        }
-
-        if in_tools && trimmed.starts_with('[') {
-            break;
-        }
-
-        if in_tools && !trimmed.is_empty() && !trimmed.starts_with('#') {
-            tool_lines.push(line.to_string());
-        }
-    }
+    let mut tool_lines = section_entries(source, "tools");
 
     if tool_lines.is_empty() {
         return Err("upstream mise.toml did not contain any [tools] entries".to_string());
     }
 
+    let mut alias_lines = section_entries(source, "tool_alias");
+    normalize_cross_arch_cargo_tools(&mut tool_lines, &mut alias_lines);
+
     let mut output = String::from("[tools]\n");
     output.push_str(&tool_lines.join("\n"));
-    normalize_cross_arch_cargo_tools(&mut output);
     output.push('\n');
+
+    if !alias_lines.is_empty() {
+        output.push_str("\n[tool_alias]\n");
+        output.push_str(&alias_lines.join("\n"));
+        output.push('\n');
+    }
+
+    output.push_str("\n[settings]\n");
+    output.push_str("cargo.binstall = true\n");
+
+    for line in section_entries(source, "settings") {
+        if line.trim_start().starts_with("idiomatic_version_file_enable_tools") {
+            output.push_str(&line);
+            output.push('\n');
+        }
+    }
+
     Ok(output)
 }
 
-fn normalize_cross_arch_cargo_tools(output: &mut String) {
-    *output = output
-        .lines()
-        .map(|line| {
-            let Some(version) = line
-                .trim()
-                .strip_prefix("\"cargo:cargo-fuzz\" = ")
-                .and_then(|value| value.strip_prefix('"'))
-                .and_then(|value| value.strip_suffix('"'))
-            else {
-                return line.to_string();
-            };
+fn section_entries(source: &str, section: &str) -> Vec<String> {
+    let header = format!("[{section}]");
+    let mut in_section = false;
+    let mut entries = Vec::new();
 
-            format!(
-                "\"cargo:cargo-fuzz\" = {{ version = \"{version}\", default-features = false }}"
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    for line in source.lines() {
+        let trimmed = line.trim();
+
+        if trimmed == header {
+            in_section = true;
+            continue;
+        }
+
+        if in_section && trimmed.starts_with('[') {
+            break;
+        }
+
+        if in_section && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            entries.push(line.to_string());
+        }
+    }
+
+    entries
+}
+
+fn normalize_cross_arch_cargo_tools(tool_lines: &mut Vec<String>, alias_lines: &mut Vec<String>) {
+    let mut normalized_tools = Vec::new();
+    let mut normalized_aliases = Vec::new();
+    let mut has_cargo_binstall = false;
+
+    for line in tool_lines.drain(..) {
+        let trimmed = line.trim();
+        if trimmed.starts_with("cargo-binstall") {
+            has_cargo_binstall = true;
+            normalized_tools.push(line);
+            continue;
+        }
+
+        if let Some((tool_name, version)) = parse_raw_cargo_tool(trimmed) {
+            normalized_tools.push(format!("{tool_name} = \"{version}\""));
+            normalized_aliases.push(format!("{tool_name} = \"cargo:{tool_name}\""));
+            continue;
+        }
+
+        normalized_tools.push(line);
+    }
+
+    if !has_cargo_binstall {
+        let insert_at = normalized_tools
+            .iter()
+            .position(|line| line.trim_start().starts_with("cargo-"))
+            .unwrap_or(normalized_tools.len());
+        normalized_tools.insert(insert_at, "cargo-binstall = \"1.20.1\"".to_string());
+    }
+
+    normalized_aliases.extend(alias_lines.iter().cloned());
+    normalized_aliases.sort();
+    normalized_aliases.dedup();
+
+    *tool_lines = normalized_tools;
+    *alias_lines = normalized_aliases;
+}
+
+fn parse_raw_cargo_tool(line: &str) -> Option<(String, String)> {
+    let (key, value) = line.split_once('=')?;
+    let tool_name = key
+        .trim()
+        .strip_prefix("\"cargo:")?
+        .strip_suffix('"')?
+        .to_string();
+
+    let value = value.trim();
+    if let Some(version) = value.strip_prefix('"').and_then(|value| value.strip_suffix('"')) {
+        return Some((tool_name, version.to_string()));
+    }
+
+    let version = value
+        .strip_prefix('{')?
+        .strip_suffix('}')?
+        .split(',')
+        .find_map(|entry| {
+            let (key, value) = entry.split_once('=')?;
+            (key.trim() == "version")
+                .then(|| value.trim().strip_prefix('"')?.strip_suffix('"').map(str::to_string))?
+        })?;
+
+    Some((tool_name, version))
 }
 
 fn write_output(output: &str, contents: &str) -> Result<(), String> {
