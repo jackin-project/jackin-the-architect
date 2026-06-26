@@ -15,7 +15,7 @@ shellfirm = "0.3.10"
 cosign = "3.1.1"
 shellcheck = "0.11.0"
 node = "24.18.0"
-syft = "1.45.1"
+syft = "1.46.0"
 zig = "0.16.0"
 
 [tool_alias]
