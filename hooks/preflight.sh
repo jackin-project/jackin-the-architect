@@ -114,124 +114,8 @@ verify_codex_caveman_skills() {
     exit 1
 }
 
-# ── Third-party provider configuration ───────────────────────────────
-# Writes ~/.claude/settings.json env block for the selected provider so
-# Claude Code routes through a third-party Anthropic-compatible endpoint.
-configure_claude_code_provider() {
-    local provider="${CLAUDE_CODE_PROVIDER:-anthropic}"
-    local settings="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/settings.json"
-
-    case "${provider}" in
-        anthropic|"")
-            return 0
-            ;;
-        zai)
-            if [[ -z "${ZAI_API_KEY:-}" ]]; then
-                warn "CLAUDE_CODE_PROVIDER=zai but ZAI_API_KEY unset — skipping"
-                return 0
-            fi
-            log "configuring Claude Code for Z.AI (GLM-5.2, 1M ctx)"
-            json_set "${settings}" --arg key "${ZAI_API_KEY}" \
-                '.env = (.env // {}) |
-                 .env.ANTHROPIC_BASE_URL = "https://api.z.ai/api/anthropic" |
-                 .env.ANTHROPIC_AUTH_TOKEN = $key |
-                 .env.ANTHROPIC_DEFAULT_OPUS_MODEL = "glm-5.2[1m]" |
-                 .env.ANTHROPIC_DEFAULT_SONNET_MODEL = "glm-5.2[1m]" |
-                 .env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "glm-4.7" |
-                 .env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = "1000000" |
-                 .env.API_TIMEOUT_MS = "3000000"' || warn "failed to write Z.AI config"
-            ;;
-        minimax)
-            if [[ -z "${MINIMAX_API_KEY:-}" ]]; then
-                warn "CLAUDE_CODE_PROVIDER=minimax but MINIMAX_API_KEY unset — skipping"
-                return 0
-            fi
-            log "configuring Claude Code for MiniMax (M3, 1M ctx)"
-            json_set "${settings}" --arg key "${MINIMAX_API_KEY}" \
-                '.env = (.env // {}) |
-                 .env.ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic" |
-                 .env.ANTHROPIC_AUTH_TOKEN = $key |
-                 .env.ANTHROPIC_MODEL = "MiniMax-M3[1m]" |
-                 .env.ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M3[1m]" |
-                 .env.ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M3[1m]" |
-                 .env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M3[1m]" |
-                 .env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = "1000000"' || warn "failed to write MiniMax config"
-            ;;
-        kimi)
-            if [[ -z "${KIMI_API_KEY:-}" ]]; then
-                warn "CLAUDE_CODE_PROVIDER=kimi but KIMI_API_KEY unset — skipping"
-                return 0
-            fi
-            log "configuring Claude Code for Kimi (K2.7)"
-            json_set "${settings}" --arg key "${KIMI_API_KEY}" \
-                '.env = (.env // {}) |
-                 .env.ANTHROPIC_BASE_URL = "https://api.kimi.com/coding/" |
-                 .env.ANTHROPIC_API_KEY = $key |
-                 .env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = "262144"' || warn "failed to write Kimi config"
-            ;;
-        *)
-            warn "unknown CLAUDE_CODE_PROVIDER=${provider} — skipping"
-            ;;
-    esac
-}
-
-# Writes ~/.codex/config.toml for the selected provider so Codex routes
-# through a third-party OpenAI-compatible endpoint.
-configure_codex_provider() {
-    local provider="${CODEX_PROVIDER:-openai}"
-    local cfg="${HOME}/.codex/config.toml"
-
-    case "${provider}" in
-        openai|"")
-            return 0
-            ;;
-        minimax)
-            if [[ -z "${MINIMAX_API_KEY:-}" ]]; then
-                warn "CODEX_PROVIDER=minimax but MINIMAX_API_KEY unset — skipping"
-                return 0
-            fi
-            log "configuring Codex for MiniMax (M3)"
-            mkdir -p "$(dirname "${cfg}")"
-            cat > "${cfg}" <<TOML
-model = "MiniMax-M3"
-model_provider = "minimax"
-model_context_window = 1000000
-
-[model_providers.minimax]
-name = "MiniMax"
-base_url = "https://api.minimax.io/v1"
-experimental_bearer_token = "${MINIMAX_API_KEY}"
-wire_api = "responses"
-TOML
-            ;;
-        zai)
-            if [[ -z "${ZAI_API_KEY:-}" ]]; then
-                warn "CODEX_PROVIDER=zai but ZAI_API_KEY unset — skipping"
-                return 0
-            fi
-            log "configuring Codex for Z.AI (GLM-5.2)"
-            mkdir -p "$(dirname "${cfg}")"
-            cat > "${cfg}" <<TOML
-model = "glm-5.2"
-model_provider = "zai"
-model_context_window = 1000000
-
-[model_providers.zai]
-name = "Z.AI"
-base_url = "https://api.z.ai/api/coding/paas/v4"
-experimental_bearer_token = "${ZAI_API_KEY}"
-wire_api = "chat"
-TOML
-            ;;
-        *)
-            warn "unknown CODEX_PROVIDER=${provider} — skipping"
-            ;;
-    esac
-}
-
 case "${JACKIN_AGENT:-}" in
     claude)
-        configure_claude_code_provider
         seed_caveman_flag
         wire_caveman_statusline
         register_rtk_hook
@@ -239,7 +123,6 @@ case "${JACKIN_AGENT:-}" in
         register_headroom_mcp
         ;;
     codex)
-        configure_codex_provider
         verify_codex_caveman_skills
         setup_context7 codex --codex --mcp
         register_headroom_mcp

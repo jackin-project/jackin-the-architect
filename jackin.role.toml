@@ -1,4 +1,4 @@
-version = "v1alpha4"
+version = "v1alpha6"
 dockerfile = "Dockerfile"
 published_image = "docker.io/projectjackin/jackin-the-architect:latest"
 agents = ["claude", "codex", "amp", "opencode", "kimi", "grok"]
@@ -23,6 +23,15 @@ plugins = [
   "caveman@caveman",
 ]
 
+[claude.providers.zai]
+model = "glm-5.2[1m]"
+
+[claude.providers.minimax]
+model = "MiniMax-M3[1m]"
+
+[claude.providers.kimi]
+model = "kimi-for-coding"
+
 [[claude.marketplaces]]
 source = "jackin-project/jackin-marketplace"
 
@@ -37,7 +46,16 @@ source = "JuliusBrussee/caveman"
 [amp]
 
 [opencode]
-model = "zai-coding-plan/glm-5.2"
+model = "zai/glm-5.2"
+
+[opencode.providers.zai]
+model = "zai/glm-5.2"
+
+[opencode.providers.minimax]
+model = "minimax/MiniMax-M3"
+
+[opencode.providers.kimi]
+model = "kimi/kimi-for-coding"
 
 [kimi]
 
@@ -59,46 +77,3 @@ default = ""
 
 [env.CAVEMAN_DEFAULT_MODE]
 default = "ultra"
-
-# ── Third-party provider selection ───────────────────────────────────
-# The preflight script writes ~/.claude/settings.json and ~/.codex/config.toml
-# based on these selections, routing Claude Code / Codex through the chosen
-# provider's Anthropic- or OpenAI-compatible endpoint.
-#
-# Claude Code providers:
-#   anthropic — default, no override
-#   zai       — GLM-5.2 (1M ctx), https://docs.z.ai/devpack/tool/claude
-#   minimax   — MiniMax-M3 (1M ctx), https://platform.minimax.io/docs/token-plan/claude-code
-#   kimi      — K2.7/K2.6 server-side mapping, https://www.kimi.com/code/docs/en/third-party-tools/other-coding-agents.html
-#
-# Codex providers:
-#   openai    — default, no override
-#   minimax   — MiniMax-M3, https://platform.minimax.io/docs/token-plan/codex
-#   zai       — GLM-5.2 via OpenAI-compatible endpoint, https://docs.z.ai/devpack/tool/others
-
-[env.CLAUDE_CODE_PROVIDER]
-interactive = true
-options = ["anthropic", "zai", "minimax", "kimi"]
-prompt = "Claude Code LLM provider:"
-default = "anthropic"
-
-[env.CODEX_PROVIDER]
-interactive = true
-options = ["openai", "minimax", "zai"]
-prompt = "Codex LLM provider:"
-default = "openai"
-
-[env.ZAI_API_KEY]
-interactive = true
-skippable = true
-prompt = "Z.AI API key (https://z.ai/manage-apikey/apikey-list)"
-
-[env.MINIMAX_API_KEY]
-interactive = true
-skippable = true
-prompt = "MiniMax API key (https://platform.minimax.io/user-center/payment/token-plan)"
-
-[env.KIMI_API_KEY]
-interactive = true
-skippable = true
-prompt = "Kimi Code API key (https://www.kimi.com/code/console)"
