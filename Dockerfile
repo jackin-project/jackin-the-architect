@@ -14,16 +14,17 @@ ARG UV_VERSION=0.11.24
 # RTK_VERSION (aqua).
 ARG RTK_VERSION=0.42.4
 
+USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    sudo apt-get update && \
-    sudo apt-get install -y --no-install-recommends \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
     openssl \
     pkg-config \
     cmake && \
-    sudo apt-get autoremove -y
+    apt-get autoremove -y
 
 USER agent
 
