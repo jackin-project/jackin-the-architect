@@ -1,4 +1,4 @@
-version = "v1alpha4"
+version = "v1alpha5"
 dockerfile = "Dockerfile"
 published_image = "docker.io/projectjackin/jackin-the-architect:latest"
 agents = ["claude", "codex", "amp", "opencode", "kimi", "grok"]
@@ -23,6 +23,15 @@ plugins = [
   "caveman@caveman",
 ]
 
+[claude.providers.zai]
+model = "glm-5.2[1m]"
+
+[claude.providers.minimax]
+model = "MiniMax-M3[1m]"
+
+[claude.providers.kimi]
+model = "kimi-for-coding"
+
 [[claude.marketplaces]]
 source = "jackin-project/jackin-marketplace"
 
@@ -37,7 +46,16 @@ source = "JuliusBrussee/caveman"
 [amp]
 
 [opencode]
-model = "zai-coding-plan/glm-5.1"
+model = "zai/glm-5.2"
+
+[opencode.providers.zai]
+model = "zai/glm-5.2"
+
+[opencode.providers.minimax]
+model = "minimax/MiniMax-M3"
+
+[opencode.providers.kimi]
+model = "kimi/kimi-for-coding"
 
 [kimi]
 
