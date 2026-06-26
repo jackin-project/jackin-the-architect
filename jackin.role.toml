@@ -1,4 +1,4 @@
-version = "v1alpha6"
+version = "v1alpha5"
 dockerfile = "Dockerfile"
 published_image = "docker.io/projectjackin/jackin-the-architect:latest"
 agents = ["claude", "codex", "amp", "opencode", "kimi", "grok"]
