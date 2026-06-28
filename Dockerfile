@@ -33,6 +33,7 @@ ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
 
 RUN mkdir -p \
+    "${HOME}/.cache/amp" \
     "${HOME}/.cache/mise" \
     "${HOME}/.cargo/bin" \
     "${HOME}/.cargo/registry" \
