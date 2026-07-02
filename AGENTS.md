@@ -1,6 +1,6 @@
 # AGENTS.md — jackin-the-architect
 
-A privileged Claude Code / Codex agent image for developing jackin itself. Extends the digest-pinned `projectjackin/construct:<version>-trixie` base and layers the generated toolchain from Jackin's upstream `mise.toml`, OpenTofu, the token-optimization stack (caveman, headroom, RTK), and a curated plugin set including `pr-review-toolkit`, `security-guidance`, `rust-best-practices`, and `caveman`. Named `the-architect` because it has the broadest operator capability of the agent role family — it can manage the entire `jackin-project` repo collection.
+A privileged Claude Code / Codex agent image for developing jackin itself. Extends the digest-pinned `projectjackin/construct:<version>-trixie` base and layers the generated toolchain from Jackin's upstream `mise.toml`, OpenTofu, the token-optimization stack (caveman, headroom, RTK), and a curated plugin set including `pr-review-toolkit`, `security-guidance`, `tailrocks-skills`, and `caveman`. Named `the-architect` because it has the broadest operator capability of the agent role family — it can manage the entire `jackin-project` repo collection.
 
 **Image distribution is public.** Because of the plugin breadth and the presence of OpenTofu (which can manage org-write credentials at runtime), this image has a larger blast radius than the sibling code-review-focused role. Treat it with proportionally more care.
 
@@ -8,7 +8,7 @@ A privileged Claude Code / Codex agent image for developing jackin itself. Exten
 
 Threat surface for this image:
 
-1. **Plugin breadth.** Compromised plugin = full access. Trust anchors: caveman (tagged), rust-best-practices. First-party jackin-dev skills installed via skills add.
+1. **Plugin breadth.** Compromised plugin = full access. Trust anchors: caveman (tagged), tailrocks-skills. First-party jackin-dev skills installed via skills add.
 2. **OpenTofu credential adjacency.** An operator running this image against `jackin-github-terraform` exports `GITHUB_TOKEN` with org-admin scope into the shell. Anything the agent does (any plugin, any skill) can see that token via `/proc/*/environ`.
 3. **Rust cargo tools.** `jackin-toolchain/mise.toml` installs Jackin's Cargo-backed tools through short mise aliases mapped to `cargo:*`, with `cargo.binstall = true` so prebuilt binaries are preferred and source builds remain the fallback. Architect additionally installs `cargo-watch` and `lychee` through `cargo-binstall`. Root tool versions are pinned where Jackin pins them; Architect-only cargo helpers are not version-pinned by this repo.
 4. **Supply chain.** mise, cargo, npm, PyPI, GitHub refs, etc.
