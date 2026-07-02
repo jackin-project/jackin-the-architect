@@ -35,6 +35,7 @@ Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTA
 - **Headroom** (uv tool) — MCP tools for compressing large context inputs
 - **RTK** (mise/aqua) — deterministic shell-output compression
 - System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
+- **xxd** — hex dump and binary patch helper
 
 Shared shell/runtime tools come from `projectjackin/construct:trixie`.
 

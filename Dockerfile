@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libssl-dev \
     openssl \
     pkg-config \
-    cmake && \
+    cmake \
+    xxd && \
     apt-get autoremove -y
 
 USER agent
