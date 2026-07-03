@@ -49,12 +49,6 @@ Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` an
 
 Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
-## Skills
-
-Installed at build time via `skills add` (codex + amp profiles):
-
-- `improve` — [shadcn/improve](https://github.com/shadcn/improve): read-only advisor that audits a codebase and writes self-contained implementation plans under `plans/` for other agents to execute.
-
 ## Runtime hooks
 
 The `hooks/preflight.sh` script runs before the agent CLI starts:

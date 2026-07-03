@@ -97,12 +97,6 @@ RUN . ~/.profile && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
 
-# improve skill (shadcn/improve).
-RUN . ~/.profile && \
-    npx -y skills add "shadcn/improve" -a codex --yes --global && \
-    npx -y skills add "shadcn/improve" -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/improve/SKILL.md"
-
 # ── Token-optimisation stack ──────────────────────────────────────────────────
 
 # AGENTS.md setup.
