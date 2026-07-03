@@ -51,7 +51,7 @@ Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
 ## Skills
 
-Installed at build time via `skills add` (codex + amp profiles):
+Installed at build time via `skills add` for supported Agent Skills hosts (`claude-code`, `codex`, `amp`, `opencode`, and `kimi-code-cli`):
 
 - `improve` — [shadcn/improve](https://github.com/shadcn/improve): read-only advisor that audits a codebase and writes self-contained implementation plans under `plans/` for other agents to execute.
 
