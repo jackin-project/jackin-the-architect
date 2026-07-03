@@ -8,7 +8,7 @@ A privileged Claude Code / Codex agent image for developing jackin itself. Exten
 
 Threat surface for this image:
 
-1. **Plugin breadth.** Compromised plugin = full access. Trust anchors: caveman (tagged), tailrocks-skills. First-party jackin-dev skills installed via skills add.
+1. **Plugin breadth.** Compromised plugin = full access. Trust anchors: caveman (tagged), tailrocks-skills. First-party jackin-dev skills installed via skills add. Third-party `improve` skill ([shadcn/improve](https://github.com/shadcn/improve)) is also installed via skills add for Claude Code, Codex, Amp, OpenCode, and Kimi Code CLI — a read-only advisor by convention, but trust is anchored in maintainer vetting, not enforcement.
 2. **OpenTofu credential adjacency.** An operator running this image against `jackin-github-terraform` exports `GITHUB_TOKEN` with org-admin scope into the shell. Anything the agent does (any plugin, any skill) can see that token via `/proc/*/environ`.
 3. **Rust cargo tools.** `jackin-toolchain/mise.toml` installs Jackin's Cargo-backed tools through short mise aliases mapped to `cargo:*`, with `cargo.binstall = true` so prebuilt binaries are preferred and source builds remain the fallback. Architect additionally installs `cargo-watch` and `lychee` through `cargo-binstall`. Root tool versions are pinned where Jackin pins them; Architect-only cargo helpers are not version-pinned by this repo.
 4. **Supply chain.** mise, cargo, npm, PyPI, GitHub refs, etc.

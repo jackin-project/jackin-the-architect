@@ -97,6 +97,19 @@ RUN . ~/.profile && \
     test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
 
+# improve skill (shadcn/improve).
+RUN . ~/.profile && \
+    npx -y skills add "shadcn/improve" -a claude-code --yes --global && \
+    npx -y skills add "shadcn/improve" -a codex --yes --global && \
+    npx -y skills add "shadcn/improve" -a amp --yes --global && \
+    npx -y skills add "shadcn/improve" -a opencode --yes --global && \
+    npx -y skills add "shadcn/improve" -a kimi-code-cli --yes --global && \
+    test -f "${HOME}/.claude/skills/improve/SKILL.md" && \
+    test -f "${HOME}/.codex/skills/improve/SKILL.md" && \
+    test -f "${HOME}/.config/agents/skills/improve/SKILL.md" && \
+    test -f "${HOME}/.config/opencode/skills/improve/SKILL.md" && \
+    test -f "${HOME}/.agents/skills/improve/SKILL.md"
+
 # ── Token-optimisation stack ──────────────────────────────────────────────────
 
 # AGENTS.md setup.
