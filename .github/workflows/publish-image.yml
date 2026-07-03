@@ -24,7 +24,7 @@ on:
 
 jobs:
   publish:
-    uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@388fb4ec4f1beb8ba0a6a1789d9c78f35f1cb3f1 # pinned
+    uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@8bfd48cedcc2402456d8051e6e2b4ce67bc95d64 # pinned
     permissions:
       contents: read
       id-token: write
