@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
 FROM projectjackin/construct:0.23-trixie@sha256:77f39933eafadb7c6d8df54dee81b5332aec1dfcd06c572af3fc14ec1d167e14
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -94,8 +97,8 @@ RUN . ~/.profile && \
 RUN . ~/.profile && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
     npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/propose/SKILL.md" && \
-    test -f "${HOME}/.agents/skills/merge-pr/SKILL.md"
+    test -f "${HOME}/.agents/skills/jackin-propose/SKILL.md" && \
+    test -f "${HOME}/.agents/skills/jackin-merge-pr/SKILL.md"
 
 # improve skill (shadcn/improve).
 RUN . ~/.profile && \
