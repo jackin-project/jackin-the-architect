@@ -44,15 +44,71 @@ jobs:
       fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.matrix-setup.outputs.configs) }}
-    # Temporary: GitHub-hosted until fleet runs velnor-runner >=0.1.115
-    # (capability admit for jackin-role-action@889e01e1).
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(matrix.config.runner) }}
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jackin-project/jackin-role-action@889e01e1fec152cc68271385f8976319244d9251 # pinned
         with:
-          jackin-version: latest-build
-          # Warm PR CI from the last published image's registry layer cache.
-          registry-cache-image: docker.io/projectjackin/jackin-the-architect
+          persist-credentials: false
+      # Inline role validate (artifacts API latest-build) so we do not depend on
+      # fleet capability allowlist for jackin-role-action pins. Still Velnor
+      # default via matrix.config.runner.
+      - name: Download jackin-role (latest-build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          case "$arch" in
+            x86_64) target=x86_64-unknown-linux-gnu ;;
+            aarch64) target=aarch64-unknown-linux-gnu ;;
+            *) echo "unsupported arch $arch" >&2; exit 1 ;;
+          esac
+          name="jackin-role-${target}"
+          echo "Resolving unexpired artifact ${name}..."
+          art_json="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jackin-project/jackin/actions/artifacts?name=${name}&per_page=20")"
+          art_id="$(printf '%s' "$art_json" | python3 -c 'import json,sys; a=json.load(sys.stdin)["artifacts"]; a=[x for x in a if not x.get("expired")]; print(a[0]["id"] if a else "")')"
+          if [ -z "$art_id" ]; then
+            echo "Failed to resolve jackin-role artifact ${name}" >&2
+            exit 1
+          fi
+          echo "Using artifact id=${art_id}"
+          curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jackin-project/jackin/actions/artifacts/${art_id}/zip" -o /tmp/jackin-role-artifact.zip
+          rm -rf /tmp/jackin-role-artifact
+          mkdir -p /tmp/jackin-role-artifact
+          unzip -oq /tmp/jackin-role-artifact.zip -d /tmp/jackin-role-artifact
+          archive="$(find /tmp/jackin-role-artifact -maxdepth 1 -name 'jackin-role-*.tar.gz' -print -quit)"
+          checksum="$(find /tmp/jackin-role-artifact -maxdepth 1 -name 'jackin-role-*.tar.gz.sha256' -print -quit)"
+          test -n "$archive" && test -n "$checksum"
+          (cd /tmp/jackin-role-artifact && sha256sum --check "$(basename "$checksum")")
+          tar -xzf "$archive" -C /tmp jackin-role
+          chmod +x /tmp/jackin-role
+          echo /tmp >> "$GITHUB_PATH"
+          /tmp/jackin-role --version
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3004
+          failure-threshold: error
+          config: .hadolint.yaml
+      - name: Validate agent repo
+        run: jackin-role validate .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build Docker image (CI check, linux/amd64)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          cache-from: |
+            type=gha,scope=${{ github.repository }}-linux-amd64
+            type=registry,ref=docker.io/projectjackin/the-architect:buildcache-amd64
+          cache-to: type=gha,scope=${{ github.repository }}-linux-amd64,mode=max
+          secrets: |
+            github_token=${{ github.token }}
