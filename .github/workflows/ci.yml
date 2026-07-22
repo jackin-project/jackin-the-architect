@@ -44,7 +44,9 @@ jobs:
       fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.matrix-setup.outputs.configs) }}
-    runs-on: ${{ fromJSON(matrix.config.runner) }}
+    # Temporary: GitHub-hosted until fleet runs velnor-runner >=0.1.115
+    # (capability admit for jackin-role-action@889e01e1).
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
