@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
+    inputs:
+      lane:
+        description: Runner lane. Defaults to Velnor.
+        type: choice
+        default: velnor
+        options: [velnor, github]
 
 permissions:
   contents: write
@@ -14,12 +20,18 @@ permissions:
 
 jobs:
   update:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
     env:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+        env:
+          # Host /opt/mise installs are shared across daemons and can ship
+          # non-executable pipx shims (Permission denied). Keep tools job-local.
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+          MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
         with:
           install: false
       - name: Update Jackin toolchain

@@ -13,12 +13,12 @@ on:
           Which runner(s) to run on. Default velnor; use both for parity runs.
         type: choice
         default: velnor
-        options: [github, velnor, both]
+        options: [velnor, github, both]
 
 jobs:
   matrix-setup:
     name: Select runner lane
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, velnor-target-mvp]
     permissions:
       contents: read
     outputs:
@@ -44,12 +44,14 @@ jobs:
       fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.matrix-setup.outputs.configs) }}
-    runs-on: ${{ fromJSON(matrix.config.runner) }}
+    # Temporary: GitHub-hosted until fleet runs velnor-runner >=0.1.115
+    # (capability admit for jackin-role-action@889e01e1).
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jackin-project/jackin-role-action@80a1acd07257a23b441c546e6fcad12239ef7626 # pinned
+      - uses: jackin-project/jackin-role-action@889e01e1fec152cc68271385f8976319244d9251 # pinned
         with:
           jackin-version: latest-build
           # Warm PR CI from the last published image's registry layer cache.

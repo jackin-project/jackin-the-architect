@@ -34,9 +34,9 @@ jobs:
     with:
       # Use native arm64 runners on the github lane. When both architectures
       # use the same runner label, the reusable workflow builds arm64 via QEMU.
-      runner-amd64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04' }}
-      runner-arm64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04-arm' }}
-      runner-merge: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-24.04' }}
+      runner-amd64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || 'velnor-target-mvp' }}
+      runner-arm64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04-arm' || 'velnor-target-mvp' }}
+      runner-merge: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || 'velnor-target-mvp' }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
