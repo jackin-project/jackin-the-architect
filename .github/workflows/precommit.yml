@@ -31,11 +31,21 @@ jobs:
       matrix:
         config: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.lanes == 'both') && '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true},{"lane":"GitHub","runner":"ubuntu-26.04","writer":false}]' || (github.event_name == 'workflow_dispatch' && inputs.lanes == 'github') && '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]' || '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true}]') }}
     runs-on: ${{ matrix.config.runner }}
+    env:
+      MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+      MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+      MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+        env:
+          # Host /opt/mise installs are shared across daemons and can ship
+          # non-executable pipx shims (Permission denied). Keep tools job-local.
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+          MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
         with:
           version: "2026.7.7"
           install_args: prek
@@ -54,6 +64,10 @@ jobs:
       matrix:
         config: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.lanes == 'both') && '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true},{"lane":"GitHub","runner":"ubuntu-26.04","writer":false}]' || (github.event_name == 'workflow_dispatch' && inputs.lanes == 'github') && '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]' || '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true}]') }}
     runs-on: ${{ matrix.config.runner }}
+    env:
+      MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+      MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+      MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
     steps:
       - env:
           NEEDS_JSON: ${{ toJSON(needs) }}
