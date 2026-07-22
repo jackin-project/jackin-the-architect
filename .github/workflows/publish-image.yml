@@ -22,7 +22,7 @@ on:
           Runner lane. Publish mutates registry state, so it runs on one
           lane only: github (default) or velnor.
         type: choice
-        default: github
+        default: velnor
         options: [github, velnor]
 
 jobs:
