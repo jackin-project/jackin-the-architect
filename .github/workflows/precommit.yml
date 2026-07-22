@@ -8,13 +8,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Runner lane. Defaults to Velnor.
+        type: choice
+        default: velnor
+        options: [velnor, github]
 
 permissions:
   contents: read
 
 jobs:
   prek:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6

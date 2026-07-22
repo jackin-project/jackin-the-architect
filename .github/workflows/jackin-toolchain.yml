@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
+    inputs:
+      lane:
+        description: Runner lane. Defaults to Velnor.
+        type: choice
+        default: velnor
+        options: [velnor, github]
 
 permissions:
   contents: write
@@ -14,7 +20,7 @@ permissions:
 
 jobs:
   update:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
     env:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:

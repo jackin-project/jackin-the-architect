@@ -7,13 +7,19 @@ on:
   schedule:
     - cron: '0 4 * * 1'
   workflow_dispatch:
+    inputs:
+      lane:
+        description: Runner lane. Defaults to Velnor.
+        type: choice
+        default: velnor
+        options: [velnor, github]
 
 permissions:
   contents: read
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
     env:
       GITLEAKS_VERSION: 8.30.1
     steps:

@@ -5,11 +5,18 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Runner lane. Defaults to Velnor.
+        type: choice
+        default: velnor
+        options: [velnor, github]
 permissions:
   contents: read
 jobs:
   reuse:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: REUSE Compliance Check
