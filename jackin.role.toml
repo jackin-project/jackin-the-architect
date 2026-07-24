@@ -22,7 +22,7 @@ plugins = [
   "pr-review-toolkit@claude-plugins-official",
   "rust-analyzer-lsp@claude-plugins-official",
   "jackin-dev@jackin-marketplace",
-  "tailrocks-skills@tailrocks-marketplace",
+  "tailrocks-skills@tailrocks-skills",
   "caveman@caveman",
 ]
 

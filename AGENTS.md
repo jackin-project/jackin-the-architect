@@ -36,7 +36,7 @@ prek install
 `.pre-commit-config.yaml` declares two hooks that run on every commit:
 
 1. **gitleaks** ([gitleaks/gitleaks](https://github.com/gitleaks/gitleaks)) — credential scanner. Catches GitHub PATs, AWS keys, private keys, bearer tokens, and ~150 other patterns in staged files. Hard-fails the commit on any match.
-2. **jackin-marketplace-audit** (local hook) — flags any plugin in `jackin.role.toml` whose marketplace isn't in the documented allow-list (`claude-plugins-official`, `jackin-marketplace`, `tailrocks-marketplace`, `caveman`). Hard-fails the commit; if you intentionally add a plugin from a new marketplace, update the allow-list in this hook and document the trust rationale in the PR body.
+2. **jackin-marketplace-audit** (local hook) — flags any plugin in `jackin.role.toml` whose marketplace isn't in the documented allow-list (`claude-plugins-official`, `jackin-marketplace`, `tailrocks-skills`, `caveman`). Hard-fails the commit; if you intentionally add a plugin from a new marketplace, update the allow-list in this hook and document the trust rationale in the PR body.
 
 The same hooks also run server-side in `.github/workflows/precommit.yml` (via [prek-action](https://github.com/j178/prek-action)) on every push and PR — a tripwire for anything that bypasses local hooks (`--no-verify`, web edits, etc.). A separate weekly cron in `.github/workflows/gitleaks-history.yml` scans the full git history with the gitleaks binary directly.
 
