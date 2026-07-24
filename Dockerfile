@@ -71,7 +71,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
     . ~/.profile && \
-    cargo binstall --no-confirm cargo-watch lychee
+    cargo binstall --locked --no-confirm cargo-watch lychee
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
