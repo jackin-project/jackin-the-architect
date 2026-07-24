@@ -44,7 +44,7 @@ Shared shell/runtime tools come from `projectjackin/construct:trixie`.
 Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` and bootstrapped at runtime by jackin. Marketplaces beyond `@claude-plugins-official`:
 
 - `@jackin-marketplace` — [jackin-project/jackin-marketplace](https://github.com/jackin-project/jackin-marketplace) (source of `jackin-dev`)
-- `@tailrocks-marketplace` — [tailrocks/tailrocks-marketplace](https://github.com/tailrocks/tailrocks-marketplace) (source of `tailrocks-skills`, including Rust guidance, Rust project setup, proposal, and research skills)
+- `@tailrocks-marketplace` — [tailrocks/tailrocks-skills](https://github.com/tailrocks/tailrocks-skills) (source of `tailrocks-skills`, including Rust guidance, Rust project setup, proposal, and research skills)
 - `@caveman` — [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) (source of `caveman`; pinned to a tagged release via Dockerfile `CAVEMAN_VERSION`)
 
 Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).

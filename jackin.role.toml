@@ -39,7 +39,7 @@ model = "kimi-for-coding"
 source = "jackin-project/jackin-marketplace"
 
 [[claude.marketplaces]]
-source = "tailrocks/tailrocks-marketplace"
+source = "tailrocks/tailrocks-skills"
 
 [[claude.marketplaces]]
 source = "JuliusBrussee/caveman"
