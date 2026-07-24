@@ -22,7 +22,7 @@ plugins = [
   "pr-review-toolkit@claude-plugins-official",
   "rust-analyzer-lsp@claude-plugins-official",
   "jackin-dev@jackin-marketplace",
-  "tailrocks-skills@tailrocks-marketplace",
+  "tailrocks-skills@tailrocks-skills",
   "caveman@caveman",
 ]
 
@@ -39,7 +39,7 @@ model = "kimi-for-coding"
 source = "jackin-project/jackin-marketplace"
 
 [[claude.marketplaces]]
-source = "tailrocks/tailrocks-marketplace"
+source = "tailrocks/tailrocks-skills"
 
 [[claude.marketplaces]]
 source = "JuliusBrussee/caveman"
