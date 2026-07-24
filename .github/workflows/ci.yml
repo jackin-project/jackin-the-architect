@@ -49,7 +49,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jackin-project/jackin-role-action@889e01e1fec152cc68271385f8976319244d9251 # pinned
+      - uses: jackin-project/jackin-role-action@723c4e94cc46ab22a1fffdc0b0e4a0f5cbb84df6 # pinned
         with:
           jackin-version: latest-build
           registry-cache-image: docker.io/projectjackin/the-architect
