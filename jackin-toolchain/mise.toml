@@ -21,7 +21,7 @@ cosign = "3.1.2"
 hyperfine = "1.20.0"
 shellcheck = "0.11.0"
 node = "24.18.0"
-syft = "1.49.0"
+syft = "1.50.0"
 zig = "0.16.0"
 
 [tool_alias]
