@@ -9,10 +9,10 @@ on:
   workflow_dispatch:
     inputs:
       lane:
-        description: Runner lane. Defaults to Velnor.
+        description: Runner lane. Defaults to GitHub.
         type: choice
-        default: velnor
-        options: [velnor, github]
+        default: github
+        options: [github, velnor]
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   update:
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'github') && 'ubuntu-26.04' || fromJSON('["self-hosted","velnor-target-mvp"]') }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && fromJSON('["self-hosted","velnor-target-mvp"]') || 'ubuntu-26.04' }}
     env:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:
