@@ -31,10 +31,6 @@ jobs:
       matrix:
         config: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.lanes == 'both') && '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true},{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":false}]' || (github.event_name == 'workflow_dispatch' && inputs.lanes == 'velnor') && '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true}]' || '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]') }}
     runs-on: ${{ matrix.config.runner }}
-    env:
-      MISE_DATA_DIR: ${{ github.workspace }}/.mise/data
-      MISE_CACHE_DIR: ${{ github.workspace }}/.mise/cache
-      MISE_CONFIG_DIR: ${{ github.workspace }}/.mise/config
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,10 +60,6 @@ jobs:
       matrix:
         config: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.lanes == 'both') && '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true},{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":false}]' || (github.event_name == 'workflow_dispatch' && inputs.lanes == 'velnor') && '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true}]' || '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]') }}
     runs-on: ${{ matrix.config.runner }}
-    env:
-      MISE_DATA_DIR: ${{ github.workspace }}/.mise/data
-      MISE_CACHE_DIR: ${{ github.workspace }}/.mise/cache
-      MISE_CONFIG_DIR: ${{ github.workspace }}/.mise/config
     steps:
       - env:
           NEEDS_JSON: ${{ toJSON(needs) }}
