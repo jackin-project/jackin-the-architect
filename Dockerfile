@@ -8,7 +8,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG CARGO_BINSTALL_VERSION=1.21.1
 ARG OPENTOFU_VERSION=1.12.5
 # CAVEMAN_VERSION must be tagged release.
-ARG CAVEMAN_VERSION=1.9.1
+ARG CAVEMAN_VERSION=1.10.0
 ARG CTX7_VERSION=0.5.5
 # HEADROOM_VERSION.
 ARG HEADROOM_VERSION=0.34.0
@@ -86,7 +86,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # Caveman (opencode clone, codex/amp skills).
 RUN . ~/.profile && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
-    node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
+    node /tmp/caveman/cli/install.js --only opencode --no-mcp-shrink && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
