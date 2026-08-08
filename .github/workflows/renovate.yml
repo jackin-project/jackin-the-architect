@@ -50,10 +50,11 @@ jobs:
           install -d -m 0755 .renovate .renovate/cache .renovate/repos
           if [ "$(id -u)" -eq 0 ]; then
             chown -R 12021:12021 .renovate
+            chmod -R u+rwX,go+rX .renovate
           else
             sudo chown -R 12021:12021 .renovate
+            sudo chmod -R u+rwX,go+rX .renovate
           fi
-          chmod -R u+rwX,go+rX .renovate
       - name: Self-hosted Renovate
         if: matrix.config.writer && env.RENOVATE_TOKEN != ''
         uses: renovatebot/github-action@316d7cd859606d6039a2182b7d69199e9b036835 # v46.2.1
