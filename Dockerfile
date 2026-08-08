@@ -86,7 +86,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 # Caveman (opencode clone, codex/amp skills).
 RUN . ~/.profile && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
-    node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
+    node /tmp/caveman/cli/install.js --only opencode --no-mcp-shrink && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
     npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
