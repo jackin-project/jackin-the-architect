@@ -10,6 +10,7 @@ ARG OPENTOFU_VERSION=1.12.5
 # CAVEMAN_VERSION must be tagged release.
 ARG CAVEMAN_VERSION=1.10.0
 ARG CTX7_VERSION=0.5.7
+ARG SKILLS_VERSION=1.5.22
 # HEADROOM_VERSION.
 ARG HEADROOM_VERSION=0.34.0
 # UV_VERSION.
@@ -81,32 +82,32 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
 
 RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise exec -- npm install -g "ctx7@${CTX7_VERSION}"
+    mise exec -- npm install -g "ctx7@${CTX7_VERSION}" "skills@${SKILLS_VERSION}"
 
 # Caveman (opencode clone, codex/amp skills).
 RUN . ~/.profile && \
     git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
     node /tmp/caveman/cli/install.js --only opencode --no-mcp-shrink && \
     test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
-    npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
-    npx -y skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
+    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
+    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/caveman/SKILL.md" && \
     rm -rf /tmp/caveman
 
 # jackin-dev skills.
 RUN . ~/.profile && \
-    npx -y skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
-    npx -y skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
+    skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
+    skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
     test -f "${HOME}/.agents/skills/jackin-propose/SKILL.md" && \
     test -f "${HOME}/.agents/skills/jackin-merge-pr/SKILL.md"
 
 # improve skill (shadcn/improve).
 RUN . ~/.profile && \
-    npx -y skills add "shadcn/improve" -a claude-code --yes --global && \
-    npx -y skills add "shadcn/improve" -a codex --yes --global && \
-    npx -y skills add "shadcn/improve" -a amp --yes --global && \
-    npx -y skills add "shadcn/improve" -a opencode --yes --global && \
-    npx -y skills add "shadcn/improve" -a kimi-code-cli --yes --global && \
+    skills add "shadcn/improve" -a claude-code --yes --global && \
+    skills add "shadcn/improve" -a codex --yes --global && \
+    skills add "shadcn/improve" -a amp --yes --global && \
+    skills add "shadcn/improve" -a opencode --yes --global && \
+    skills add "shadcn/improve" -a kimi-code-cli --yes --global && \
     test -f "${HOME}/.claude/skills/improve/SKILL.md" && \
     test -f "${HOME}/.agents/skills/improve/SKILL.md"
 
@@ -140,7 +141,7 @@ RUN --mount=type=secret,id=github_token,uid=1000,required=false \
     mise install "uv@${UV_VERSION}" && \
     mise use -g --pin "uv@${UV_VERSION}"
 
-RUN . ~/.profile && uv tool install "headroom-ai[mcp]==${HEADROOM_VERSION}"
+RUN . ~/.profile && uv tool install --no-build "headroom-ai[mcp]==${HEADROOM_VERSION}"
 
 # PATH for shims.
 ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
