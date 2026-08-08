@@ -47,7 +47,11 @@ jobs:
           install_args: prek
           cache_save: ${{ github.ref == 'refs/heads/main' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - run: prek run --all-files
+      - env:
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+          MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
+        run: prek run --all-files
 
   precommit-required:
     needs: [prek]
