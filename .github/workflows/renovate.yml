@@ -41,19 +41,17 @@ jobs:
       - name: Cache Renovate repository cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: .renovate/cache
+          path: /tmp/renovate/cache/renovate/repository
           key: renovate-${{ matrix.config.lane }}-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             renovate-${{ matrix.config.lane }}-${{ runner.os }}-
       - name: Grant Renovate ownership without world-write
         run: |
-          install -d -m 0755 .renovate .renovate/cache .renovate/repos
+          install -d -m 0755 /tmp/renovate/cache/renovate/repository
           if [ "$(id -u)" -eq 0 ]; then
-            chown -R 12021:12021 .renovate
-            chmod -R u+rwX,go+rX .renovate
+            chown -R 12021:0 /tmp/renovate
           else
-            sudo chown -R 12021:12021 .renovate
-            sudo chmod -R u+rwX,go+rX .renovate
+            sudo chown -R 12021:0 /tmp/renovate
           fi
       - name: Self-hosted Renovate
         if: matrix.config.writer && env.RENOVATE_TOKEN != ''
@@ -65,7 +63,6 @@ jobs:
           RENOVATE_ONBOARDING: false
           RENOVATE_GIT_AUTHOR: "Renovate Bot <renovate@whitesourcesoftware.com>"
           RENOVATE_REPOSITORY_CACHE: enabled
-          RENOVATE_BASE_DIR: /github/workspace/.renovate
           LOG_LEVEL: debug
       - name: Explain non-writer or missing-token lane
         if: ${{ !matrix.config.writer || env.RENOVATE_TOKEN == '' }}
