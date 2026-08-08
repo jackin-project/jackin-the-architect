@@ -5,7 +5,7 @@ FROM projectjackin/construct:0.32-trixie@sha256:b447e86ae285326bc2dcfa2248141b12
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG CARGO_BINSTALL_VERSION=1.21.0
+ARG CARGO_BINSTALL_VERSION=1.21.1
 ARG OPENTOFU_VERSION=1.12.5
 # CAVEMAN_VERSION must be tagged release.
 ARG CAVEMAN_VERSION=1.10.0
