@@ -25,7 +25,7 @@ node = "24.19.0"
 python = "3.14"
 uv = "0.12.3"
 "pipx:reuse" = { version = "6.2.0", extras = "charset-normalizer", depends = ["python"] }
-syft = "1.46.0"
+syft = "1.50.0"
 zig = "0.16.0"
 
 [tool_alias]
