@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 name: reuse-compliance
 on:
-  pull_request:
   push:
     branches: [main]
   workflow_dispatch:

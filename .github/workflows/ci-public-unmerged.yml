@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI (public unmerged)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-public-unmerged-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate (${{ matrix.config.lane }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [{"lane":"GitHub","runner":"ubuntu-26.04"}]
+    runs-on: ${{ matrix.config.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jackin-project/jackin-role-action@723c4e94cc46ab22a1fffdc0b0e4a0f5cbb84df6 # pinned
+        with:
+          jackin-version: latest-build
+          registry-cache-image: docker.io/projectjackin/the-architect
