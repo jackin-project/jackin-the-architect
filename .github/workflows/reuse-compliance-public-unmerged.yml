@@ -27,7 +27,7 @@ jobs:
           MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
           MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
         with:
-          version: "2026.8.3"
+          version: "2026.8.4"
           install_args: python uv pipx:reuse
           cache_save: false
           github_token: ${{ github.token }}
