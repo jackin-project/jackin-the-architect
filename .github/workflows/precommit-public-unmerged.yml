@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+name: pre-commit (public unmerged)
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: precommit-public-unmerged-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prek:
+    name: Pre-commit (${{ matrix.config.lane }})
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]
+    runs-on: ${{ matrix.config.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        env:
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+          MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
+        with:
+          version: "2026.8.3"
+          install_args: prek
+          cache_save: false
+          github_token: ${{ github.token }}
+      - env:
+          MISE_DATA_DIR: ${{ runner.temp }}/mise-data
+          MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
+          MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
+        run: prek run --all-files
+
+  precommit-required:
+    needs: [prek]
+    if: always()
+    name: Pre-commit required (${{ matrix.config.lane }})
+    permissions: {}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]
+    runs-on: ${{ matrix.config.runner }}
+    steps:
+      - env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: echo "$NEEDS_JSON" | jq -e 'to_entries | map(.value.result) | any(. == "failure" or . == "cancelled") | not' >/dev/null
