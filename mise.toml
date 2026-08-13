@@ -11,3 +11,7 @@ uv = "0.12.3"
 
 [settings]
 lockfile = true
+
+[tasks.ci]
+description = "Run the repository CI gate"
+run = "prek run --all-files"
