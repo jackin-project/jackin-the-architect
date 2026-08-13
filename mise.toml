@@ -11,3 +11,19 @@ uv = "0.12.3"
 
 [settings]
 lockfile = true
+
+[tasks.ci]
+description = "Run the repository CI gate"
+run = "prek run --all-files"
+
+[tasks.test]
+description = "Run the repository test gate"
+run = "prek run --all-files"
+
+[tasks.lint]
+description = "Run the repository lint gate"
+run = "prek run --all-files"
+
+[tasks.fmt]
+description = "Run the repository formatting gate"
+run = "prek run --all-files"
