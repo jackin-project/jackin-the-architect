@@ -22,7 +22,7 @@ dylint-link = "6.0.1"
 cosign = "3.1.2"
 hyperfine = "1.20.0"
 shellcheck = "0.11.0"
-node = "24.18.0"
+node = "24.19.0"
 python = "3.14"
 periphery = { version = "3.8.0", os = ["macos"] }
 swiftlint = { version = "0.65.0", os = ["macos"] }
