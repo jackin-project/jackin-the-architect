@@ -20,13 +20,15 @@ on:
       lane:
         description: |
           Runner lane. Publish mutates registry state, so it runs on one
-          lane only: github (default) or velnor.
+          lane: velnor (default), github, or both. In both mode Velnor is
+          the sole publisher and GitHub performs a read-only parity build.
         type: choice
-        default: github
-        options: [github, velnor]
+        default: velnor
+        options: [velnor, github, both]
 
 jobs:
-  publish:
+  publish-velnor:
+    if: github.event_name != 'workflow_dispatch' || inputs.lane == 'velnor' || inputs.lane == 'both'
     uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@f5d2f6a1ecae5c450a86b2c2fa3349acbf32a6e0 # pinned
     permissions:
       contents: read
@@ -34,9 +36,26 @@ jobs:
     with:
       # Use native arm64 runners on the github lane. When both architectures
       # use the same runner label, the reusable workflow builds arm64 via QEMU.
-      runner-amd64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-26.04' }}
-      runner-arm64: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-26.04-arm' }}
-      runner-merge: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && 'velnor-target-mvp' || 'ubuntu-26.04' }}
+      runner-amd64: velnor-target-mvp
+      runner-arm64: velnor-target-mvp
+      runner-merge: velnor-target-mvp
+      publish: true
+    secrets:
+      registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
+      github-readonly-token: ${{ secrets.GH_READONLY_TOKEN }}
+
+  publish-github:
+    if: github.event_name == 'workflow_dispatch' && (inputs.lane == 'github' || inputs.lane == 'both')
+    uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@f5d2f6a1ecae5c450a86b2c2fa3349acbf32a6e0 # pinned
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      runner-amd64: ubuntu-26.04
+      runner-arm64: ubuntu-26.04-arm
+      runner-merge: ubuntu-26.04
+      publish: ${{ inputs.lane == 'github' }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_TOKEN }}

@@ -8,11 +8,11 @@ on:
     - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
-      lane:
-        description: Runner lane. Defaults to GitHub.
+      lanes:
+        description: velnor (default) | github | both
         type: choice
-        default: github
-        options: [github, velnor]
+        default: velnor
+        options: [velnor, github, both]
 
 permissions:
   contents: write
@@ -24,7 +24,12 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && fromJSON('["self-hosted","velnor-target-mvp"]') || 'ubuntu-26.04' }}
+    name: Update Jackin toolchain (${{ matrix.config.lane }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.lanes == 'both') && '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true},{"lane":"GitHub","runner":"ubuntu-26.04","writer":false}]' || (github.event_name == 'workflow_dispatch' && inputs.lanes == 'github') && '[{"lane":"GitHub","runner":"ubuntu-26.04","writer":true}]' || '[{"lane":"Velnor","runner":["self-hosted","velnor-target-mvp"],"writer":true}]') }}
+    runs-on: ${{ matrix.config.runner }}
     timeout-minutes: 20
     env:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
@@ -42,6 +47,7 @@ jobs:
       - name: Update Jackin toolchain
         run: mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs
       - name: Create pull request
+        if: matrix.config.writer
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ env.RENOVATE_TOKEN }}
@@ -52,3 +58,6 @@ jobs:
           signoff: true
           body: |
             Updates `jackin-toolchain/mise.toml` from upstream `jackin-project/jackin` `mise.toml`.
+      - name: Verify comparison lane remains read-only
+        if: ${{ !matrix.config.writer }}
+        run: git diff --exit-code
