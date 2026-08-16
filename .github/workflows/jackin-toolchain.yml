@@ -18,9 +18,14 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: jackin-toolchain-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.lane == 'velnor') && fromJSON('["self-hosted","velnor-target-mvp"]') || 'ubuntu-26.04' }}
+    timeout-minutes: 20
     env:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:
