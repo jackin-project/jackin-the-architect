@@ -50,6 +50,7 @@ jobs:
           if [ "$(id -u)" -eq 0 ]; then
             chown -R 12021:0 /tmp/renovate
           else
+            # velnor-sudo-exception: transfer the workspace-owned cache to Renovate's fixed container UID
             sudo chown -R 12021:0 /tmp/renovate
           fi
       - name: Self-hosted Renovate
