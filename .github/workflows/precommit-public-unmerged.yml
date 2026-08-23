@@ -39,7 +39,7 @@ jobs:
           MISE_CACHE_DIR: ${{ runner.temp }}/mise-cache
           MISE_CONFIG_DIR: ${{ runner.temp }}/mise-config
         with:
-          version: "2026.8.6"
+          version: "2026.8.11"
           install_args: prek
           cache_save: false
           github_token: ${{ github.token }}
