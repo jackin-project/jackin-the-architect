@@ -48,16 +48,28 @@ jobs:
         run: mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs
       - name: Create pull request
         if: matrix.config.writer
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ env.RENOVATE_TOKEN }}
-          branch: renovate/jackin-toolchain
-          delete-branch: true
-          title: "build: update jackin toolchain"
-          commit-message: "build: update jackin toolchain"
-          signoff: true
-          body: |
-            Updates `jackin-toolchain/mise.toml` from upstream `jackin-project/jackin` `mise.toml`.
+        env:
+          GH_TOKEN: ${{ env.RENOVATE_TOKEN }}
+          # peter-evans/create-pull-request is not in the Velnor strict
+          # capability manifest, so jobs using it are rejected at admission
+          # (capability_validation). Use the gh CLI in a run step instead.
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No toolchain changes; skipping pull request."
+            exit 0
+          fi
+          git config user.name "Renovate Bot"
+          git config user.email "renovate@whitesourcesoftware.com"
+          git checkout -B renovate/jackin-toolchain
+          git add jackin-toolchain/mise.toml
+          git commit -s -m "build: update jackin toolchain"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" renovate/jackin-toolchain
+          gh pr create \
+            --title "build: update jackin toolchain" \
+            --body "Updates \`jackin-toolchain/mise.toml\` from upstream \`jackin-project/jackin\` \`mise.toml\`." \
+            --head renovate/jackin-toolchain \
+          || gh pr view renovate/jackin-toolchain
       - name: Verify comparison lane remains read-only
         if: ${{ !matrix.config.writer }}
         run: git diff --exit-code
