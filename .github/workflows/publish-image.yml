@@ -27,8 +27,12 @@ on:
         options: [velnor, github, both]
 
 jobs:
+  # Post-merge push events are not admitted on velnor-trusted
+  # (merged_push_occupancy); fleet policy routes push publishes to the
+  # GitHub lane so open PRs keep the fleet. Velnor stays the publisher for
+  # workflow_dispatch lane=velnor|both.
   publish-velnor:
-    if: github.event_name != 'workflow_dispatch' || inputs.lane == 'velnor' || inputs.lane == 'both'
+    if: github.event_name == 'workflow_dispatch' && (inputs.lane == 'velnor' || inputs.lane == 'both')
     uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@f3a55713333df77f08d8d783f0f6035a6bea7996 # pinned
     permissions:
       contents: read
@@ -46,7 +50,7 @@ jobs:
       github-readonly-token: ${{ secrets.GH_READONLY_TOKEN }}
 
   publish-github:
-    if: github.event_name == 'workflow_dispatch' && (inputs.lane == 'github' || inputs.lane == 'both')
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.lane == 'github' || inputs.lane == 'both'))
     uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@f3a55713333df77f08d8d783f0f6035a6bea7996 # pinned
     permissions:
       contents: read
@@ -55,7 +59,7 @@ jobs:
       runner-amd64: ubuntu-26.04
       runner-arm64: ubuntu-26.04-arm
       runner-merge: ubuntu-26.04
-      publish: ${{ inputs.lane == 'github' }}
+      publish: ${{ github.event_name == 'push' || inputs.lane == 'github' }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
