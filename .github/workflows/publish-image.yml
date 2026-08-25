@@ -17,11 +17,8 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      lane:
-        description: |
-          Runner lane. Publish mutates registry state, so it runs on one
-          lane: velnor (default), github, or both. In both mode Velnor is
-          the sole publisher and GitHub performs a read-only parity build.
+      lanes:
+        description: velnor (default) | github | both
         type: choice
         default: velnor
         options: [velnor, github, both]
@@ -30,9 +27,9 @@ jobs:
   # Post-merge push events are not admitted on velnor-trusted
   # (merged_push_occupancy); fleet policy routes push publishes to the
   # GitHub lane so open PRs keep the fleet. Velnor stays the publisher for
-  # workflow_dispatch lane=velnor|both.
+  # workflow_dispatch lanes=velnor|both.
   publish-velnor:
-    if: github.event_name == 'workflow_dispatch' && (inputs.lane == 'velnor' || inputs.lane == 'both')
+    if: github.event_name == 'workflow_dispatch' && (inputs.lanes == 'velnor' || inputs.lanes == 'both')
     uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@3683b3450c2d052ef26cce02922a6678b5fd20f5 # pinned
     permissions:
       contents: read
@@ -50,7 +47,7 @@ jobs:
       github-readonly-token: ${{ secrets.GH_READONLY_TOKEN }}
 
   publish-github:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.lane == 'github' || inputs.lane == 'both'))
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.lanes == 'github' || inputs.lanes == 'both'))
     uses: jackin-project/jackin-role-action/.github/workflows/publish.yml@3683b3450c2d052ef26cce02922a6678b5fd20f5 # pinned
     permissions:
       contents: read
@@ -59,7 +56,7 @@ jobs:
       runner-amd64: ubuntu-26.04
       runner-arm64: ubuntu-26.04-arm
       runner-merge: ubuntu-26.04
-      publish: ${{ github.event_name == 'push' || inputs.lane == 'github' }}
+      publish: ${{ github.event_name == 'push' || inputs.lanes == 'github' }}
     secrets:
       registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
       registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
