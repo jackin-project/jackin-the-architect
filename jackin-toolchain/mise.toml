@@ -1,9 +1,9 @@
 [tools]
-"aqua:apple/container" = { version = "1.3.0", os = ["macos"] }
-"github:open-telemetry/weaver" = "0.25.1"
+"aqua:apple/container" = { version = "1.2.2", os = ["macos"] }
+"github:open-telemetry/weaver" = "0.24.2"
 actionlint = "1.7.12"
-bun = "1.4.0"
-cargo-binstall = "1.22.0"
+bun = "1.3.14"
+cargo-binstall = "1.21.1"
 cargo-audit = "0.22.2"
 cargo-deny = "0.20.2"
 cargo-dylint = "6.0.4"
@@ -13,27 +13,29 @@ cargo-hakari = "0.9.38"
 cargo-llvm-cov = "0.8.7"
 cargo-mutants = "27.1.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
-cargo-shear = "1.13.0"
-uniffi = "0.32.0"
+cargo-shear = "1.13.4"
+boltffi_cli = "0.30.1"
 cargo-zigbuild = "0.23.0"
-codebook-lsp = "0.3.41"
-sccache = "0.17.0"
-dylint-link = "6.0.1"
+codebook-lsp = "0.3.42"
+sccache = "0.16.0"
+dylint-link = "6.0.4"
 cosign = "3.1.3"
 hyperfine = "1.20.0"
 shellcheck = "0.11.0"
-node = "24.19.0"
-python = "3.14"
+node = "24.18.0"
+python = "3.14.7"
+ripgrep = "15.2.0"
 periphery = { version = "3.8.0", os = ["macos"] }
 swiftlint = { version = "0.65.1", os = ["macos"] }
-uv = "0.12.6"
+uv = "0.11.29"
 "pipx:reuse" = { version = "6.2.0", extras = "charset-normalizer", depends = ["python"] }
-syft = "1.51.0"
+syft = "1.46.0"
 xcodegen = "2.46.0"
 xcbeautify = { version = "3.2.1", os = ["macos"] }
 zig = "0.16.0"
 
 [tool_alias]
+boltffi_cli = "cargo:boltffi_cli"
 cargo-audit = "cargo:cargo-audit"
 cargo-deny = "cargo:cargo-deny"
 cargo-dylint = "cargo:cargo-dylint"
@@ -47,7 +49,6 @@ cargo-zigbuild = "cargo:cargo-zigbuild"
 codebook-lsp = "cargo:codebook-lsp"
 dylint-link = "cargo:dylint-link"
 sccache = "cargo:sccache"
-uniffi = "cargo:uniffi"
 
 [settings]
 cargo.binstall = true
