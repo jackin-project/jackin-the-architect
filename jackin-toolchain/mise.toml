@@ -3,7 +3,7 @@
 "github:open-telemetry/weaver" = "0.24.2"
 actionlint = "1.7.12"
 bun = "1.4.0"
-cargo-binstall = "1.21.1"
+cargo-binstall = "1.22.0"
 cargo-audit = "0.22.2"
 cargo-deny = "0.20.2"
 cargo-dylint = "6.0.4"
