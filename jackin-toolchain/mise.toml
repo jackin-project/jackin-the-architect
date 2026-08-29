@@ -22,7 +22,7 @@ dylint-link = "6.0.4"
 cosign = "3.1.3"
 hyperfine = "1.20.0"
 shellcheck = "0.11.0"
-node = "24.19.0"
+node = "24.20.0"
 python = "3.14.7"
 ripgrep = "15.2.0"
 periphery = { version = "3.8.0", os = ["macos"] }
