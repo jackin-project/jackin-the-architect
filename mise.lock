@@ -197,6 +197,7 @@ provenance = "github-attestations"
 checksum = "sha256:8681d8921e7d520fb368991dcf5f9c1905b80f5bf2a265a0ed085c8d8e342477"
 url = "https://github.com/astral-sh/uv/releases/download/0.12.6/uv-x86_64-unknown-linux-gnu.tar.gz"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/529690831"
+provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64-musl"]
 checksum = "sha256:14e4172aace66a475062cebec7ca04f497d5619e95325dfcc9e4447b9c516846"
