@@ -16,7 +16,7 @@ ARG HEADROOM_VERSION=0.36.5
 # UV_VERSION.
 ARG UV_VERSION=0.12.6
 # RTK_VERSION (aqua).
-ARG RTK_VERSION=0.45.0
+ARG RTK_VERSION=0.46.0
 
 USER root
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
