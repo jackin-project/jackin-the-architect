@@ -12,18 +12,23 @@ uv = "0.12.6"
 [settings]
 lockfile = true
 
-[tasks.ci]
-description = "Run the repository CI gate"
+# Gate task contract: `test` is the single real gate (one `prek run
+# --all-files` execution per commit). `ci`, `lint`, and `fmt` are pure
+# depends-aliases of `test` with no command of their own, so every gate name
+# the canonical CI workflow calls (`mise run ci/test/lint/fmt`) resolves to
+# exactly one prek execution and no task carries a duplicated command.
+[tasks.test]
+description = "Run the repository test gate (single prek execution)"
 run = "prek run --all-files"
 
-[tasks.test]
-description = "Run the repository test gate"
-run = "prek run --all-files"
+[tasks.ci]
+description = "Human aggregate gate: alias of test"
+depends = ["test"]
 
 [tasks.lint]
-description = "Run the repository lint gate"
-run = "prek run --all-files"
+description = "Alias of test: prek is the single lint gate"
+depends = ["test"]
 
 [tasks.fmt]
-description = "Run the repository formatting gate"
-run = "prek run --all-files"
+description = "Alias of test: prek is the single format gate"
+depends = ["test"]
