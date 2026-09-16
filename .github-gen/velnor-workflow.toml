@@ -1,0 +1,18 @@
+schema = 1
+
+[generator]
+repository = "jackin-project/jackin-the-architect"
+revision = "2c591728a70045dbfee49c9bb4ca0a4ee3612e74"
+
+[workflow]
+runners = "github"
+automatic = "github"
+default_dispatch_runner = "github"
+automatic_lanes = "github"
+github_runner = "ubuntu-24.04"
+velnor_labels = ["self-hosted", "velnor-target-mvp"]
+default_branch = "main"
+
+[[static_files]]
+file = ".github/actions/report-velnor-ci-outcomes/action.yml"
+source = ".github-gen/sources/actions/report-velnor-ci-outcomes/action.yml"
