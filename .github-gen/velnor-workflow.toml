@@ -5,7 +5,7 @@ repository = "jackin-project/jackin-the-architect"
 revision = "03f9409b3f649a8973169dde0ebba3fe58a92ac9"
 
 [policy]
-ruleset_required_status_checks = ["ci-required"]
+ruleset_required_status_checks = ["ci-required", "Policy"]
 ruleset_external_status_checks = ["DCO"]
 
 [workflow]
