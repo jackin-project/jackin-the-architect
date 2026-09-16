@@ -1,13 +1,10 @@
 schema = 1
-
 [generator]
 repository = "jackin-project/jackin-the-architect"
-revision = "03f9409b3f649a8973169dde0ebba3fe58a92ac9"
-
+revision = "e05aee6de1d1614d752b4d1b1d26a49ac2c5ef91"
 [policy]
 ruleset_required_status_checks = ["ci-required"]
 ruleset_external_status_checks = ["DCO"]
-
 [workflow]
 runners = "github"
 automatic = "github"
@@ -16,7 +13,3 @@ automatic_lanes = "github"
 github_runner = "ubuntu-24.04"
 velnor_labels = ["self-hosted", "velnor-target-mvp"]
 default_branch = "main"
-
-[[static_files]]
-file = ".github/actions/report-velnor-ci-outcomes/action.yml"
-source = ".github-gen/sources/actions/report-velnor-ci-outcomes/action.yml"
