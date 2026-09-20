@@ -12,8 +12,6 @@ uv = "0.12.6"
 [settings]
 lockfile = true
 
-# One prek leaf. ci/lint/fmt are names for the same task.
 [tasks.test]
 description = "Run the repository gate"
 run = "prek run --all-files"
-alias = ["ci", "lint", "fmt"]
