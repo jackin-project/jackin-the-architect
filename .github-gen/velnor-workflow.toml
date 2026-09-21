@@ -1,15 +1,13 @@
-schema = 1
+schema = 2
 [generator]
 repository = "jackin-project/jackin-the-architect"
-revision = "4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d"
+revision = "be61acbbbfb71db6b51337e547e39de049d4fc15"
 [policy]
-ruleset_required_status_checks = ["ci-required"]
+ruleset_required_status_checks = ["ci-required", "Policy"]
 ruleset_external_status_checks = ["DCO"]
 [workflow]
-runners = "github"
-automatic = "github"
-default_dispatch_runner = "github"
-automatic_lanes = "github"
-github_runner = "ubuntu-24.04"
-velnor_labels = ["self-hosted", "velnor-target-mvp"]
+providers = ["github-hosted"]
+automatic_providers = ["github-hosted"]
 default_branch = "main"
+[workflow.selectors.github-hosted]
+runs_on = ["ubuntu-24.04"]

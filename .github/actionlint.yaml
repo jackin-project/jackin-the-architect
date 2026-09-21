@@ -4,6 +4,4 @@
 
 self-hosted-runner:
   labels:
-    - self-hosted
     - ubuntu-24.04
-    - velnor-target-mvp
