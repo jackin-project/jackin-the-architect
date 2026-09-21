@@ -7,13 +7,6 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      runner:
-        description: Execution backend
-        required: false
-        default: github
-        type: choice
-        options:
-          - github
       scope:
         description: Verification scope
         required: true
@@ -46,8 +39,17 @@ jobs:
       base_sha: ${{ steps.plan.outputs.base_sha }}
       head_sha: ${{ steps.plan.outputs.head_sha }}
       units: ${{ steps.plan.outputs.units }}
+      unit_ids: ${{ steps.plan.outputs.unit_ids }}
       full_units: ${{ steps.plan.outputs.full_units }}
+      plan_digest: ${{ steps.plan.outputs.plan_digest }}
+      excluded: ${{ steps.plan.outputs.excluded }}
       docker_matrix: ${{ steps.plan.outputs.docker_matrix }}
+      # Presence-only no-work marker: `planned_no_work` is `true` or absent,
+      # never `false`. Consumers MUST branch
+      # `needs.plan.outputs.planned_no_work == 'true'` for the no-work path;
+      # any other value (including absent) means the plan selected work.
+      planned_no_work: ${{ steps.plan.outputs.planned_no_work }}
+      no_work_reason: ${{ steps.plan.outputs.no_work_reason }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,12 +58,11 @@ jobs:
           persist-credentials: false
       - name: Set up Velnor workflow runtime
         id: runtime
-        if: ${{ runner.environment == 'github-hosted' }}
-        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@be61acbbbfb71db6b51337e547e39de049d4fc15
         with:
-          rev: 4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+          rev: be61acbbbfb71db6b51337e547e39de049d4fc15
       - name: Set trusted workflow policy revision
-        run: echo "VELNOR_WORKFLOW_POLICY_REVISION=4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d" >> "$GITHUB_ENV"
+        run: echo "VELNOR_WORKFLOW_POLICY_REVISION=be61acbbbfb71db6b51337e547e39de049d4fc15" >> "$GITHUB_ENV"
       - name: Select affected units
         id: plan
         env:
@@ -69,15 +70,26 @@ jobs:
           CI_SCOPE_OVERRIDE: ${{ github.event.inputs.scope || '' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.base_sha || github.event.before || 'refs/heads/main' }}
           HEAD_SHA: ${{ github.sha }}
+          VELNOR_PROVIDERS: github-hosted
+          VELNOR_EVENT_TRUSTED: ${{ (!(github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.event.pull_request.user.type == 'Bot'))) && 'true' || 'false' }}
+          VELNOR_EXPECTED_WORK_FILE: .velnor-ci-expected-work/expected-work.json
         run: |
           set -euo pipefail
           if [[ -z "${CI_SCOPE_OVERRIDE:-}" ]]; then unset CI_SCOPE_OVERRIDE; fi
+          mkdir -p .velnor-ci-expected-work
           velnor-workflow plan --config .github/ci/project.toml
 
+      - name: Publish expected work
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: velnor-expected-work
+          path: .velnor-ci-expected-work/expected-work.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare Velnor workflow runtime
         shell: bash
         env:
-          EXPECTED_REVISION: 4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+          EXPECTED_REVISION: be61acbbbfb71db6b51337e547e39de049d4fc15
         run: |
           set -euo pipefail
           stage="$RUNNER_TEMP/velnor-workflow-runtime"
@@ -96,7 +108,7 @@ jobs:
       - name: Publish Velnor workflow runtime
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: velnor-workflow-runtime-4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d-${{ runner.os }}-${{ runner.arch }}
+          name: velnor-workflow-runtime-be61acbbbfb71db6b51337e547e39de049d4fc15-${{ runner.os }}-${{ runner.arch }}
           path: ${{ runner.temp }}/velnor-workflow-runtime
           if-no-files-found: error
           retention-days: 7
@@ -135,9 +147,9 @@ jobs:
           fi
           git checkout --quiet --detach "$HEAD_SHA"
       - name: Set up Velnor workflow runtime
-        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@be61acbbbfb71db6b51337e547e39de049d4fc15
         with:
-          rev: 4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+          rev: be61acbbbfb71db6b51337e547e39de049d4fc15
           checkout-path: ${{ github.workspace }}/policy-checkout
       - name: Read declared generator pin
         id: pin
@@ -150,13 +162,13 @@ jobs:
           echo "value=$pin" >> "$GITHUB_OUTPUT"
       - name: Set up declared generator product
         id: renderer
-        if: steps.pin.outputs.value != '4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d'
-        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+        if: steps.pin.outputs.value != 'be61acbbbfb71db6b51337e547e39de049d4fc15'
+        uses: tailrocks/velnor/.github/actions/setup-velnor-workflow@be61acbbbfb71db6b51337e547e39de049d4fc15
         with:
           rev: ${{ steps.pin.outputs.value }}
           checkout-path: ${{ github.workspace }}/policy-checkout
       - name: Resolve declared generator product
-        if: steps.pin.outputs.value != '4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d'
+        if: steps.pin.outputs.value != 'be61acbbbfb71db6b51337e547e39de049d4fc15'
         run: |
           set -euo pipefail
           binary="$HOME/.cache/velnor/workflow-runtime/${{ steps.renderer.outputs.closure }}/bin/velnor-workflow"
@@ -190,7 +202,7 @@ jobs:
           WORKFLOW_ROOT: ${{ github.workspace }}/policy-checkout
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-          VELNOR_WORKFLOW_POLICY_REVISION: 4fa7a3a85f141a6bb95bc9bdf0eef9e3ddde165d
+          VELNOR_WORKFLOW_POLICY_REVISION: be61acbbbfb71db6b51337e547e39de049d4fc15
         run: |
           set -euo pipefail
           velnor-workflow policy \
@@ -210,38 +222,140 @@ jobs:
         env:
           MISE_NO_CONFIG: "1"
         run: mise exec actionlint@1.7.12 -- actionlint
-  github-docker:
-    name: "Docker · Docker"
-    if: ${{ always() && needs.plan.result == 'success' && needs.policy.result == 'success' && contains(format(',{0},', needs.plan.outputs.units), ',docker,') && (github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')) || (github.event_name == 'workflow_dispatch' && (github.event.inputs.runner == 'github' || github.event.inputs.runner == 'both' || github.event.inputs.runner == ''))) }}
+  github-hosted-docker:
+    name: "Docker · Docker · github-hosted — docker"
+    if: ${{ always() && needs.plan.result == 'success' && needs.policy.result == 'success' && contains(needs.plan.outputs.units, '"unit_id":"docker"') && (true) }}
     needs: [plan, policy]
     uses: ./.github/workflows/ci-unit-docker.yml
     with:
       unit: docker
-      lane: github
+      provider: github-hosted
       selected_units: ${{ needs.plan.outputs.units }}
+      selected_unit_ids: ${{ needs.plan.outputs.unit_ids }}
       scope: ${{ needs.plan.outputs.scope }}
       full_units: ${{ needs.plan.outputs.full_units }}
+      plan_digest: ${{ needs.plan.outputs.plan_digest }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       head_sha: ${{ needs.plan.outputs.head_sha }}
-      unit_admission: github
+      unit_platform: linux-x64
+      unit_trust: untrusted-ok
+      unit_admission: github-hosted
   ci-required:
     name: ci-required
     if: ${{ always() }}
-    needs: [plan, policy, github-docker]
+    needs: [plan, policy, github-hosted-docker]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Download Velnor workflow runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velnor-workflow-runtime-be61acbbbfb71db6b51337e547e39de049d4fc15-${{ runner.os }}-${{ runner.arch }}
+          path: .velnor-workflow-runtime
+      - name: Verify Velnor workflow runtime
+        shell: bash
+        env:
+          EXPECTED_REVISION: be61acbbbfb71db6b51337e547e39de049d4fc15
+        run: |
+          set -euo pipefail
+          manifest=.velnor-workflow-runtime/manifest.json
+          jq -e --arg revision "$EXPECTED_REVISION" --arg repository "$GITHUB_REPOSITORY" --arg platform "${RUNNER_OS}-${RUNNER_ARCH}" --arg run_id "$GITHUB_RUN_ID" '.revision == $revision and .repository == $repository and .platform == $platform and .run_id == $run_id and (.run_id | test("^[0-9]+$")) and .job_id != "" and (.binary_sha256 | test("^[0-9a-f]{64}$")) and (.policy_binary_sha256 | test("^[0-9a-f]{64}$")) and (.closure | test("^[0-9a-f]{64}$")) and (.policy_closure | test("^[0-9a-f]{64}$"))' "$manifest" >/dev/null
+          expected="$(jq -er '.binary_sha256' "$manifest")"
+          actual="$(sha256sum .velnor-workflow-runtime/velnor-workflow | awk '{print $1}')"
+          [[ "$actual" == "$expected" ]] || { echo "::error::runtime digest mismatch" >&2; exit 1; }
+          expected="$(jq -er '.policy_binary_sha256' "$manifest")"
+          actual="$(sha256sum .velnor-workflow-runtime/velnor-workflow-policy | awk '{print $1}')"
+          [[ "$actual" == "$expected" ]] || { echo "::error::policy runtime digest mismatch" >&2; exit 1; }
+      - name: Add Velnor workflow runtime to PATH
+        shell: bash
+        env:
+          EXPECTED_REVISION: be61acbbbfb71db6b51337e547e39de049d4fc15
+        run: |
+          set -euo pipefail
+          home="$RUNNER_TEMP/velnor-workflow-runtime-artifact"
+          install -Dm0755 .velnor-workflow-runtime/velnor-workflow "$home/bin/velnor-workflow"
+          install -Dm0755 .velnor-workflow-runtime/velnor-workflow-policy "$home/bin/velnor-workflow-policy"
+          expected_closure="$(jq -er '.policy_closure' .velnor-workflow-runtime/manifest.json)"
+          reported="$("$home/bin/velnor-workflow-policy" --closure)"
+          [[ "$reported" == "$expected_closure" ]] || { echo "::error::policy runtime reports closure $reported, expected $expected_closure" >&2; exit 1; }
+          echo "$home/bin" >> "$GITHUB_PATH"
+          echo "VELNOR_WORKFLOW_PINNED_BINARY=$home/bin/velnor-workflow-policy" >> "$GITHUB_ENV"
+      - name: Download expected work
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: velnor-expected-work
+          path: .velnor-ci-expected-work
+      - name: Download reported unit results
+        # A no-work plan runs no unit jobs, so zero result artifacts is the
+        # expected case there — and the aggregate fails a real-work plan with
+        # zero records anyway. Tolerate the empty download; never the verdict.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: velnor-result-*
+          merge-multiple: true
+          path: .velnor-ci-results
+      - name: Collect reported unit results
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p .velnor-ci-results
+          files=(.velnor-ci-results/result-*.json)
+          for file in "${files[@]}"; do
+            if jq -e 'any(.results[]?; has("reused_from"))' "$file" >/dev/null; then
+              echo "::error::$file carries reused_from without a validate_reuse decision; render emits no reused results" >&2
+              exit 1
+            fi
+          done
+          if (( ${#files[@]} == 0 )); then
+            printf '{"results":[]}\n' > .velnor-ci-results.json
+          else
+            jq -s '{results: ([.[].results // empty] | add // [])}' "${files[@]}" > .velnor-ci-results.json
+          fi
+          echo "collected $(jq '.results | length' .velnor-ci-results.json) reported result(s) from ${#files[@]} record file(s)"
+      - name: Score expected work against reported results
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.plan.outputs.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          velnor-workflow aggregate --expected .velnor-ci-expected-work/expected-work.json --results .velnor-ci-results.json
       - name: Validate generated stack results
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
           SELECTED_UNITS: ${{ needs.plan.outputs.units }}
-          LANE_ADMITTED_GITHUB: ${{ github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')) || (github.event_name == 'workflow_dispatch' && (github.event.inputs.runner == 'github' || github.event.inputs.runner == 'both' || github.event.inputs.runner == '')) }}
+          PLAN_DIGEST: ${{ needs.plan.outputs.plan_digest }}
+          EXCLUDED: ${{ needs.plan.outputs.excluded }}
+          EXPECTED_CALLERS: "[{\"job_id\":\"github-hosted-docker\",\"provider\":\"github-hosted\",\"unit_id\":\"docker\"}]"
+          PROVIDER_ADMITTED_GITHUB_HOSTED: ${{ true }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$PLAN_DIGEST" ]]; then
+            echo "plan did not freeze a plan digest: the expected set has no identity" >&2
+            exit 1
+          fi
+          echo "verdict binds plan digest $PLAN_DIGEST"
           result_for_job() {
             jq -r --arg job "$1" '.[$job].result // empty' <<<"$NEEDS_JSON"
           }
+          plan_expects() {
+            [[ "$(jq -r --arg unit "$1" --arg provider "$2" '[.[] | select(.unit_id == $unit) | .providers[] | select(. == $provider)] | length' <<<"$SELECTED_UNITS")" -gt 0 ]]
+          }
+          if ! jq -e --argjson expected "$EXPECTED_CALLERS" '($expected | type == "array") and all($expected[]; type == "object" and (.unit_id | type) == "string" and (.provider | type) == "string" and (.job_id | type) == "string")' -n; then
+            echo "generated required-caller contract is malformed" >&2
+            exit 1
+          fi
+          if ! jq -e --argjson expected "$EXPECTED_CALLERS" 'type == "array" and (map(.unit_id) | unique | length) == length and all(.[]; . as $entry | ($entry | type) == "object" and ($entry.unit_id | type) == "string" and ($entry.unit_id | length) > 0 and ($entry.providers | type) == "array" and ($entry.providers | length) > 0 and (($entry.providers | map(type == "string" and length > 0) | all)) and (($entry.providers | unique | length) == ($entry.providers | length)) and all($entry.providers[]; . as $provider | any($expected[]; .unit_id == $entry.unit_id and .provider == $provider)))' <<<"$SELECTED_UNITS" >/dev/null; then
+            echo "plan selected-unit output contains an unknown, duplicate, empty, or unmapped obligation" >&2
+            exit 1
+          fi
+          if ! jq -e 'type == "object"' <<<"$NEEDS_JSON" >/dev/null; then
+            echo "workflow needs output is malformed" >&2
+            exit 1
+          fi
           result="$(result_for_job plan)"
           if [[ "$result" != success ]]; then
             echo "required CI prerequisite plan did not pass: $result" >&2
@@ -252,25 +366,27 @@ jobs:
             echo "required CI prerequisite policy did not pass: $result" >&2
             exit 1
           fi
-          selected=",$SELECTED_UNITS,"
-          if [[ "$selected" == *",docker,"* ]]; then
-            result="$(result_for_job github-docker)"
-            if [[ "$LANE_ADMITTED_GITHUB" == true ]]; then
+          if plan_expects "docker" "github-hosted"; then
+            result="$(result_for_job github-hosted-docker)"
+            if [[ "$PROVIDER_ADMITTED_GITHUB_HOSTED" == true ]]; then
               case "$result" in
                 success) ;;
-                *) echo "selected CI job github-docker did not pass: $result" >&2; exit 1 ;;
+                skipped) echo "expected CI job github-hosted-docker was skipped: a skipped expected result cannot pass" >&2; exit 1 ;;
+                cancelled) echo "expected CI job github-hosted-docker was cancelled: a cancelled expected result cannot pass" >&2; exit 1 ;;
+                *) echo "expected CI job github-hosted-docker did not pass: $result" >&2; exit 1 ;;
               esac
             else
               case "$result" in
                 skipped) ;;
-                *) echo "selected CI job github-docker ran outside its lane admission (LANE_ADMITTED_GITHUB=$LANE_ADMITTED_GITHUB): $result" >&2; exit 1 ;;
+                *) echo "selected CI job github-hosted-docker ran outside its provider admission (PROVIDER_ADMITTED_GITHUB_HOSTED=$PROVIDER_ADMITTED_GITHUB_HOSTED): $result" >&2; exit 1 ;;
               esac
             fi
           else
-            result="$(result_for_job github-docker)"
+            result="$(result_for_job github-hosted-docker)"
             case "$result" in
-              success|skipped) ;;
-              *) echo "unselected CI job github-docker failed unexpectedly: $result" >&2; exit 1 ;;
+              skipped) ;;
+              success) echo "unexpected CI job github-hosted-docker succeeded outside the expected set: the plan did not declare it" >&2; exit 1 ;;
+              *) echo "unexpected CI job github-hosted-docker ran outside the expected set: $result" >&2; exit 1 ;;
             esac
           fi
   required:
