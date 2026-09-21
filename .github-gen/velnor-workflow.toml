@@ -1,7 +1,7 @@
 schema = 2
 [generator]
 repository = "jackin-project/jackin-the-architect"
-revision = "be61acbbbfb71db6b51337e547e39de049d4fc15"
+revision = "eed474c4a1d9b071fd1b5de00c769c8997398e5a"
 [policy]
 ruleset_required_status_checks = ["ci-required", "Policy"]
 ruleset_external_status_checks = ["DCO"]
