@@ -16,17 +16,6 @@
       "managerFilePatterns": [
         "/(^|/)Dockerfile$/"
       ],
-      "matchStrings": ["ARG CARGO_BINSTALL_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "cargo-bins/cargo-binstall",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
       "matchStrings": ["ARG OPENTOFU_VERSION=(?<currentValue>[\\d.]+)"],
       "datasourceTemplate": "github-releases",
       "packageNameTemplate": "opentofu/opentofu",
@@ -38,40 +27,9 @@
       "managerFilePatterns": [
         "/(^|/)Dockerfile$/"
       ],
-      "matchStrings": ["ARG CAVEMAN_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "JuliusBrussee/caveman",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG CTX7_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "npm",
-      "packageNameTemplate": "ctx7"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
       "matchStrings": ["ARG HEADROOM_VERSION=(?<currentValue>[\\d.]+)"],
       "datasourceTemplate": "pypi",
       "packageNameTemplate": "headroom-ai"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG UV_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "astral-sh/uv",
-      "extractVersionTemplate": "^(?<version>.+)$",
-      "versioningTemplate": "semver"
     },
     {
       "customType": "regex",

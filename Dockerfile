@@ -7,32 +7,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG MISE_VERSION=2026.9.18
 ARG MBX_VERSION=1.22.0
-ARG CARGO_BINSTALL_VERSION=1.23.0
-ARG CARGO_AUDIT_VERSION=0.22.2
-ARG CARGO_DENY_VERSION=0.20.2
-ARG CARGO_DYLINT_VERSION=6.0.4
 ARG CARGO_WATCH_VERSION=8.5.3
-ARG CARGO_HACK_VERSION=0.6.45
-ARG CARGO_HAKARI_VERSION=0.9.38
-ARG CARGO_LLVM_COV_VERSION=0.8.7
 ARG LYCHEE_VERSION=0.24.2
-ARG BOLTFFI_VERSION=0.30.1
-ARG CARGO_FUZZ_VERSION=0.13.2
-ARG CARGO_SHEAR_VERSION=1.13.4
-ARG CARGO_ZIGBUILD_VERSION=0.23.0
-ARG CODEBOOK_LSP_VERSION=0.3.42
-ARG SCCACHE_VERSION=0.17.0
-ARG DYLINT_LINK_VERSION=6.0.4
-ARG CARGO_MUTANTS_VERSION=27.1.0
 ARG TARGETARCH
 ARG OPENTOFU_VERSION=1.12.6
-ARG NODE_TOOLS_VERSION=24.21.0
 ARG CARGO_BUILD_JOBS=4
 ARG MISE_JOBS=1
 # HEADROOM_VERSION.
 ARG HEADROOM_VERSION=0.37.0
-# UV_VERSION.
-ARG UV_VERSION=0.12.15
 # RTK_VERSION (aqua).
 ARG RTK_VERSION=0.49.0
 
@@ -56,6 +38,7 @@ ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/architect-node-tools/n
 ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 
 COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
+COPY --chown=root:root --chmod=0555 maintained-image-build/read-mise-tool-version.sh /usr/local/bin/read-mise-tool-version
 
 RUN set -eu; \
     mkdir -p "${HOME}/.local/bin"; \
@@ -82,17 +65,21 @@ RUN set -eu; \
 
 # Per-tool RUNs (caching).
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    MISE_CARGO_BINSTALL_ONLY=1 mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
-    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
+    set -eu; \
+    cargo_binstall_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-binstall)"; \
+    MISE_CARGO_BINSTALL_ONLY=1 mise install "cargo-binstall@${cargo_binstall_version}" && \
+    mise use -g --pin "cargo-binstall@${cargo_binstall_version}"
 
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
+    set -eu; \
+    cargo_binstall_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-binstall)"; \
     mise trust /tmp/jackin-mise/mise.toml && \
     mkdir -p "${HOME}/.config/mise" && \
     cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
     : "Keep cargo-binstall pinned before installing Cargo-backed mise tools" && \
-    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
+    mise use -g --pin "cargo-binstall@${cargo_binstall_version}" && \
     mise install -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise --tool-option mr_boxington=true rust "mr-boxington@${MBX_VERSION}"
@@ -104,20 +91,33 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     --mount=type=cache,target=/home/agent/.cache/cargo-target-${TARGETARCH},uid=1000 \
     set -eu; \
-    case "${TARGETARCH}" in \
-        amd64) \
+    cargo_audit_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-audit)"; \
+    cargo_deny_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-deny)"; \
+    cargo_dylint_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-dylint)"; \
+    cargo_fuzz_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-fuzz)"; \
+    cargo_hack_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-hack)"; \
+    cargo_hakari_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-hakari)"; \
+    cargo_llvm_cov_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-llvm-cov)"; \
+    cargo_mutants_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-mutants)"; \
+    cargo_shear_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-shear)"; \
+    cargo_zigbuild_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.cargo-zigbuild)"; \
+    codebook_lsp_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.codebook-lsp)"; \
+    sccache_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.sccache)"; \
+    dylint_link_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.dylint-link)"; \
+    case "${sccache_version}:${TARGETARCH}" in \
+        0.17.0:amd64) \
             sccache_target=x86_64-unknown-linux-musl; \
             sccache_sha256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006 \
             ;; \
-        arm64) \
+        0.17.0:arm64) \
             sccache_target=aarch64-unknown-linux-musl; \
             sccache_sha256=821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77 \
             ;; \
-        *) echo "unsupported TARGETARCH for Rust tool installation: ${TARGETARCH}" >&2; exit 1 ;; \
+        *) echo "unsupported sccache pin: ${sccache_version}:${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    sccache_archive="/tmp/sccache-v${SCCACHE_VERSION}-${sccache_target}.tar.gz"; \
-    sccache_url="https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}"; \
-    sccache_asset="sccache-v${SCCACHE_VERSION}-${sccache_target}.tar.gz"; \
+    sccache_archive="/tmp/sccache-v${sccache_version}-${sccache_target}.tar.gz"; \
+    sccache_url="https://github.com/mozilla/sccache/releases/download/v${sccache_version}"; \
+    sccache_asset="sccache-v${sccache_version}-${sccache_target}.tar.gz"; \
     curl -fsSL \
         --proto '=https' --proto-redir '=https' --tlsv1.2 \
         "${sccache_url}/${sccache_asset}" \
@@ -126,10 +126,10 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     sccache_unpack="/tmp/sccache-${TARGETARCH}"; \
     mkdir -p "${sccache_unpack}"; \
     tar --extract --gzip --file "${sccache_archive}" --directory "${sccache_unpack}"; \
-    sccache_root="${HOME}/.local/share/mise/installs/sccache/${SCCACHE_VERSION}/bin"; \
+    sccache_root="${HOME}/.local/share/mise/installs/sccache/${sccache_version}/bin"; \
     mkdir -p "${sccache_root}"; \
     install -m 0755 \
-        "${sccache_unpack}/sccache-v${SCCACHE_VERSION}-${sccache_target}/sccache" \
+        "${sccache_unpack}/sccache-v${sccache_version}-${sccache_target}/sccache" \
         "${sccache_root}/sccache"; \
     test -x "${sccache_root}/sccache"; \
     rm -rf "${sccache_unpack}" "${sccache_archive}"; \
@@ -323,39 +323,40 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
         test -x "${install_root}/bin/${package}"; \
         rm -rf "${source_root}" "${source_archive}"; \
     }; \
-    install_prebuilt_cargo_tool cargo-audit "${CARGO_AUDIT_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-deny "${CARGO_DENY_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-dylint "${CARGO_DYLINT_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-hack "${CARGO_HACK_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-hakari "${CARGO_HAKARI_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-llvm-cov "${CARGO_LLVM_COV_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-shear "${CARGO_SHEAR_VERSION}"; \
-    install_prebuilt_cargo_tool cargo-zigbuild "${CARGO_ZIGBUILD_VERSION}"; \
-    install_prebuilt_cargo_tool codebook-lsp "${CODEBOOK_LSP_VERSION}"; \
-    install_prebuilt_cargo_tool dylint-link "${DYLINT_LINK_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-audit "${cargo_audit_version}"; \
+    install_prebuilt_cargo_tool cargo-deny "${cargo_deny_version}"; \
+    install_prebuilt_cargo_tool cargo-dylint "${cargo_dylint_version}"; \
+    install_prebuilt_cargo_tool cargo-hack "${cargo_hack_version}"; \
+    install_prebuilt_cargo_tool cargo-hakari "${cargo_hakari_version}"; \
+    install_prebuilt_cargo_tool cargo-llvm-cov "${cargo_llvm_cov_version}"; \
+    install_prebuilt_cargo_tool cargo-shear "${cargo_shear_version}"; \
+    install_prebuilt_cargo_tool cargo-zigbuild "${cargo_zigbuild_version}"; \
+    install_prebuilt_cargo_tool codebook-lsp "${codebook_lsp_version}"; \
+    install_prebuilt_cargo_tool dylint-link "${dylint_link_version}"; \
     case "${TARGETARCH}" in \
         amd64) \
-            install_prebuilt_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
-            install_prebuilt_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}" \
+            install_prebuilt_cargo_tool cargo-fuzz "${cargo_fuzz_version}"; \
+            install_prebuilt_cargo_tool cargo-mutants "${cargo_mutants_version}" \
             ;; \
         arm64) \
-            install_mbx_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
-            install_mbx_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}" \
+            install_mbx_cargo_tool cargo-fuzz "${cargo_fuzz_version}"; \
+            install_mbx_cargo_tool cargo-mutants "${cargo_mutants_version}" \
             ;; \
         *) echo "unsupported TARGETARCH for Cargo tool installation: ${TARGETARCH}" >&2; exit 1 ;; \
     esac
 
 # BoltFFI publishes verified x64 and ARM64 release binaries with custom names.
 RUN set -eu; \
-    case "${TARGETARCH}" in \
-        amd64) boltffi_arch=x86_64; boltffi_sha256=342af5abf855dcea1b88b1f2fd8b72ba09083f0d8eab7a0930b954539defce4a ;; \
-        arm64) boltffi_arch=aarch64; boltffi_sha256=ec4d6a94cd5c032e8a381a824deddf97c724e7e3f43d86050e4df9f86e2e7b41 ;; \
-        *) echo "unsupported TARGETARCH for BoltFFI: ${TARGETARCH}" >&2; exit 1 ;; \
+    boltffi_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.boltffi_cli)"; \
+    case "${boltffi_version}:${TARGETARCH}" in \
+        0.30.1:amd64) boltffi_arch=x86_64; boltffi_sha256=342af5abf855dcea1b88b1f2fd8b72ba09083f0d8eab7a0930b954539defce4a ;; \
+        0.30.1:arm64) boltffi_arch=aarch64; boltffi_sha256=ec4d6a94cd5c032e8a381a824deddf97c724e7e3f43d86050e4df9f86e2e7b41 ;; \
+        *) echo "unsupported BoltFFI pin: ${boltffi_version}:${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    boltffi_root="${HOME}/.local/share/mise/installs/boltffi-cli/${BOLTFFI_VERSION}"; \
+    boltffi_root="${HOME}/.local/share/mise/installs/boltffi-cli/${boltffi_version}"; \
     mkdir -p "${boltffi_root}/bin"; \
     boltffi_archive="/tmp/boltffi-linux-${boltffi_arch}.tar.gz"; \
-    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/boltffi/boltffi/releases/download/v${BOLTFFI_VERSION}/boltffi-linux-${boltffi_arch}.tar.gz" -o "${boltffi_archive}"; \
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/boltffi/boltffi/releases/download/v${boltffi_version}/boltffi-linux-${boltffi_arch}.tar.gz" -o "${boltffi_archive}"; \
     printf '%s  %s\n' "${boltffi_sha256}" "${boltffi_archive}" | sha256sum --check --strict -; \
     tar --extract --gzip --file "${boltffi_archive}" --directory "${boltffi_root}/bin"; \
     test -x "${boltffi_root}/bin/boltffi"; \
@@ -406,7 +407,8 @@ COPY --chown=agent:agent maintained-image-build/skills-cli/package.json maintain
 # Pinned sources avoid moving-branch lookups, Git credential fallbacks, and adapter drift.
 RUN . ~/.profile && set -eu; \
     umask 022; \
-    node_bin="${HOME}/.local/share/mise/installs/node/${NODE_TOOLS_VERSION}/bin"; \
+    node_tools_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.node)"; \
+    node_bin="${HOME}/.local/share/mise/installs/node/${node_tools_version}/bin"; \
     npm_home=/tmp/architect-npm-home; \
     npm_config_dir=/tmp/architect-npm-config; \
     source_root=/tmp/architect-sources; \
@@ -416,7 +418,7 @@ RUN . ~/.profile && set -eu; \
     : > "${npm_config_dir}/user.npmrc"; \
     : > "${npm_config_dir}/global.npmrc"; \
     export PATH="${node_bin}:${PATH}"; \
-    test "$("${node_bin}/node" --version)" = "v${NODE_TOOLS_VERSION}"; \
+    test "$("${node_bin}/node" --version)" = "v${node_tools_version}"; \
     test "$("${node_bin}/npm" --version)" = "11.19.0"; \
     cd /tmp; \
     env -i HOME="${npm_home}" PATH="${node_bin}:/usr/bin:/bin" \
@@ -516,8 +518,10 @@ RUN find /tmp/AGENTS.md.d -maxdepth 1 -type f -name '*.md' | sort | \
 
 # Headroom.
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    mise install "uv@${UV_VERSION}" && \
-    mise use -g --pin "uv@${UV_VERSION}"
+    set -eu; \
+    uv_version="$(read-mise-tool-version /tmp/jackin-mise/mise.toml tools.uv)"; \
+    mise install "uv@${uv_version}" && \
+    mise use -g --pin "uv@${uv_version}"
 
 RUN . ~/.profile && uv tool install --no-build "headroom-ai[mcp]==${HEADROOM_VERSION}"
 
