@@ -405,6 +405,7 @@ COPY --chown=agent:agent maintained-image-build/skills-cli/package.json maintain
 
 # Pinned sources avoid moving-branch lookups, Git credential fallbacks, and adapter drift.
 RUN . ~/.profile && set -eu; \
+    umask 022; \
     node_bin="${HOME}/.local/share/mise/installs/node/${NODE_TOOLS_VERSION}/bin"; \
     npm_home=/tmp/architect-npm-home; \
     npm_config_dir=/tmp/architect-npm-config; \
@@ -451,7 +452,8 @@ RUN . ~/.profile && set -eu; \
         git_clean -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "${git_dir}" \
             archive --format=tar --output="${archive_path}" FETCH_HEAD; \
         printf '%s  %s\n' "${archive_sha}" "${archive_path}" | sha256sum --check --strict -; \
-        tar --extract --file "${archive_path}" --directory "${source_dir}" --no-same-owner; \
+        tar --extract --file "${archive_path}" --directory "${source_dir}" \
+            --no-same-owner --no-same-permissions; \
         rm -rf "${git_dir}" "${archive_path}"; \
     }; \
     acquire_source caveman JuliusBrussee/caveman \
