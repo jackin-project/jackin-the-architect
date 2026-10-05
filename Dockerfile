@@ -55,7 +55,7 @@ RUN set -eu; \
         *) echo "unsupported TARGETARCH for mise: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     mise_archive="${HOME}/.local/bin/mise"; \
-    curl -fsSL "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-${mise_arch}" -o "${mise_archive}"; \
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-${mise_arch}" -o "${mise_archive}"; \
     printf '%s  %s\n' "${mise_sha256}" "${mise_archive}" | sha256sum --check --strict -; \
     chmod 0755 "${mise_archive}"; \
     "${mise_archive}" --version | grep -Fq "mise ${MISE_VERSION}"
@@ -114,7 +114,7 @@ RUN set -eu; \
     boltffi_root="${HOME}/.local/share/mise/installs/boltffi-cli/${BOLTFFI_VERSION}"; \
     mkdir -p "${boltffi_root}/bin"; \
     boltffi_archive="/tmp/boltffi-linux-${boltffi_arch}.tar.gz"; \
-    curl -fsSL "https://github.com/boltffi/boltffi/releases/download/v${BOLTFFI_VERSION}/boltffi-linux-${boltffi_arch}.tar.gz" -o "${boltffi_archive}"; \
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/boltffi/boltffi/releases/download/v${BOLTFFI_VERSION}/boltffi-linux-${boltffi_arch}.tar.gz" -o "${boltffi_archive}"; \
     printf '%s  %s\n' "${boltffi_sha256}" "${boltffi_archive}" | sha256sum --check --strict -; \
     tar --extract --gzip --file "${boltffi_archive}" --directory "${boltffi_root}/bin"; \
     test -x "${boltffi_root}/bin/boltffi"; \
@@ -142,13 +142,13 @@ RUN set -eu; \
         *) echo "unsupported TARGETARCH for helper binaries: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     cargo_watch_archive="/tmp/cargo-watch-v${CARGO_WATCH_VERSION}-${release_target}.tar.xz"; \
-    curl -fsSL "https://github.com/watchexec/cargo-watch/releases/download/v${CARGO_WATCH_VERSION}/cargo-watch-v${CARGO_WATCH_VERSION}-${release_target}.tar.xz" -o "${cargo_watch_archive}"; \
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/watchexec/cargo-watch/releases/download/v${CARGO_WATCH_VERSION}/cargo-watch-v${CARGO_WATCH_VERSION}-${release_target}.tar.xz" -o "${cargo_watch_archive}"; \
     printf '%s  %s\n' "${cargo_watch_sha512}" "${cargo_watch_archive}" | sha512sum --check --strict -; \
     mkdir -p /tmp/cargo-watch; \
     tar --extract --xz --file "${cargo_watch_archive}" --directory /tmp/cargo-watch --strip-components=1; \
     install -m 0755 /tmp/cargo-watch/cargo-watch "${HOME}/.local/bin/cargo-watch"; \
     lychee_archive="/tmp/lychee-${release_target}.tar.gz"; \
-    curl -fsSL "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-${release_target}.tar.gz" -o "${lychee_archive}"; \
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-${release_target}.tar.gz" -o "${lychee_archive}"; \
     printf '%s  %s\n' "${lychee_sha256}" "${lychee_archive}" | sha256sum --check --strict -; \
     mkdir -p /tmp/lychee; \
     tar --extract --gzip --file "${lychee_archive}" --directory /tmp/lychee --strip-components=1; \
