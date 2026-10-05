@@ -98,8 +98,9 @@ RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     mise use -g --pin -C /tmp/jackin-mise --tool-option mr_boxington=true rust "mr-boxington@${MBX_VERSION}"
 
 # Cargo-binstall queries GitHub's API while resolving release assets. Install
-# verified sccache archives directly, then use pinned MBX for the remaining
-# Cargo tools so private builds do not depend on unauthenticated API limits.
+# verified sccache archives directly. Fetch the other locked crate archives
+# from crates.io and use MBX path installs so compilation remains cached. The
+# archive hashes below match the crates.io index records for these versions.
 RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     --mount=type=cache,target=/home/agent/.cache/cargo-target-${TARGETARCH},uid=1000 \
@@ -136,12 +137,41 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     install_mbx_cargo_tool() { \
         package="$1"; \
         version="$2"; \
+        case "${package}@${version}" in \
+            cargo-audit@0.22.2) crate_sha256=700c2b240f7fd330c24b675fe429f73a5b676531fcc6300400b2b67f155ba12a ;; \
+            cargo-deny@0.20.2) crate_sha256=e528dfcbe739af7ce37a77d3d6df1b29dd6887b1c701d888820c0f16b864f737 ;; \
+            cargo-dylint@6.0.4) crate_sha256=93782091fc2b6982aad8d610fa4f3ce40dce417a3b7c63f7836e409ff599d2d7 ;; \
+            cargo-fuzz@0.13.2) crate_sha256=5acfd01930e49823e58c30dd8012d3338a620377d7c7d4cc140ca4b2169400e2 ;; \
+            cargo-hack@0.6.45) crate_sha256=3570c04182c76b68872933e4b8d72d72d664b177c9b76a40e8808f840ba82996 ;; \
+            cargo-hakari@0.9.38) crate_sha256=4a4622babda50818065ec5b40902513fa74d96fafef9613cf5af23728593c4fa ;; \
+            cargo-llvm-cov@0.8.7) crate_sha256=dbb60793c145d8ef09b5cfa49c2f2890b93bde5a13885a9369654ca87dddfe7f ;; \
+            cargo-mutants@27.1.0) crate_sha256=07072e7bcdeb425d5e5fdbfd9f15a2c749e23cb2edf5ef40aee5876760ae1cf9 ;; \
+            cargo-shear@1.13.4) crate_sha256=d593f2faa41608b68b5d0aeab4f66eac3b52afadeb7e066626e3042dfbdcbf20 ;; \
+            cargo-zigbuild@0.23.0) crate_sha256=68c7df45b9d9934aaed5987fbf422b31419f81827b13a52251a61e1e772c6ff7 ;; \
+            codebook-lsp@0.3.42) crate_sha256=8a0313cfd268e08d858d771b6404375637921c543c751a08d8eb4612a73e6946 ;; \
+            dylint-link@6.0.4) crate_sha256=993baebfc3e9df560d5eb51c4ee7bfe43ce58244179b628a474d5b6e96ad316a ;; \
+            *) echo "unsupported pinned Cargo source: ${package}@${version}" >&2; exit 1 ;; \
+        esac; \
         install_root="${HOME}/.local/share/mise/installs/${package}/${version}"; \
+        source_archive="/tmp/${package}-${version}.crate"; \
+        source_root="/tmp/jackin-cargo-sources/${package}-${version}"; \
+        curl -fsSL \
+            --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            "https://static.crates.io/crates/${package}/${package}-${version}.crate" \
+            -o "${source_archive}"; \
+        printf '%s  %s\n' "${crate_sha256}" "${source_archive}" | sha256sum --check --strict -; \
+        mkdir -p "${source_root}"; \
+        tar --extract --gzip --file "${source_archive}" \
+            --directory "${source_root}" --strip-components=1 \
+            --no-same-owner --no-same-permissions; \
+        test -s "${source_root}/Cargo.toml"; \
+        test -s "${source_root}/Cargo.lock"; \
         MISE_EXEC_AUTO_INSTALL=0 \
-        MISE_CARGO_BINSTALL_ONLY=1 \
         CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
-            mise exec -- mbx install --locked --root "${install_root}" "${package}@${version}"; \
+            mise exec -C /tmp/jackin-mise -- mbx install \
+                --locked --path "${source_root}" --root "${install_root}"; \
         test -x "${install_root}/bin/${package}"; \
+        rm -rf "${source_root}" "${source_archive}"; \
     }; \
     install_mbx_cargo_tool cargo-audit "${CARGO_AUDIT_VERSION}"; \
     install_mbx_cargo_tool cargo-deny "${CARGO_DENY_VERSION}"; \
