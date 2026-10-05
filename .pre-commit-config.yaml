@@ -12,3 +12,10 @@ repos:
         language: script
         files: ^jackin\.role\.toml$
         pass_filenames: false
+
+      - id: jackin-marketplace-audit-regression
+        name: jackin.role.toml marketplace audit regression tests
+        entry: scripts/marketplace-audit.test.sh
+        language: script
+        files: ^(jackin\.role\.toml|scripts/marketplace-audit(\.test)?\.sh)$
+        pass_filenames: false

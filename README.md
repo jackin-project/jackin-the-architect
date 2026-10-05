@@ -44,8 +44,11 @@ Shared shell/runtime tools come from `projectjackin/construct:trixie`.
 Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` and bootstrapped at runtime by jackin. Marketplaces beyond `@claude-plugins-official`:
 
 - `@jackin-marketplace` — [jackin-project/jackin-marketplace](https://github.com/jackin-project/jackin-marketplace) (source of `jackin-dev`)
-- `@tailrocks-skills` — [tailrocks/tailrocks-skills](https://github.com/tailrocks/tailrocks-skills) (source of `tailrocks-skills`, including Rust guidance, Rust project setup, proposal, and research skills)
+- `@tailrocks-rust-skills` — [tailrocks/tailrocks-rust-skills](https://github.com/tailrocks/tailrocks-rust-skills) (Rust guidance, project setup, review, refactoring, and remediation)
+- `@tailrocks-roadmap-skills` — [tailrocks/tailrocks-roadmap-skills](https://github.com/tailrocks/tailrocks-roadmap-skills) (research, brainstorming, planning, verification, and delivery)
 - `@caveman` — [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) (source of `caveman`; pinned to a tagged release via Dockerfile `CAVEMAN_VERSION`)
+
+Invoke these skills explicitly; the Roadmap pack covers proposal work through idea capture, research, and planning skills.
 
 Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
 
