@@ -57,7 +57,11 @@ RUN set -eu; \
     curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-${mise_arch}" -o "${mise_archive}"; \
     printf '%s  %s\n' "${mise_sha256}" "${mise_archive}" | sha256sum --check --strict -; \
     chmod 0755 "${mise_archive}"; \
-    "${mise_archive}" --version | grep -Fq "mise ${MISE_VERSION}"; \
+    mise_version="$(MISE_DISABLE_UPDATE_WARNING=1 "${mise_archive}" --version)"; \
+    case "${mise_version}" in \
+        "${MISE_VERSION} "*) ;; \
+        *) echo "unexpected Mise version: ${mise_version}" >&2; exit 1 ;; \
+    esac; \
     mkdir -p \
         "${HOME}/.cache/amp" \
         "${HOME}/.cache/mise" \
