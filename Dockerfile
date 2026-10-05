@@ -16,6 +16,8 @@ ARG CARGO_MUTANTS_VERSION=27.1.0
 ARG TARGETARCH
 ARG OPENTOFU_VERSION=1.12.6
 ARG NODE_TOOLS_VERSION=24.21.0
+ARG CARGO_BUILD_JOBS=4
+ARG MISE_JOBS=1
 # HEADROOM_VERSION.
 ARG HEADROOM_VERSION=0.37.0
 # UV_VERSION.
@@ -55,14 +57,13 @@ RUN set -eu; \
     curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-${mise_arch}" -o "${mise_archive}"; \
     printf '%s  %s\n' "${mise_sha256}" "${mise_archive}" | sha256sum --check --strict -; \
     chmod 0755 "${mise_archive}"; \
-    "${mise_archive}" --version | grep -Fq "mise ${MISE_VERSION}"
-
-RUN mkdir -p \
-    "${HOME}/.cache/amp" \
-    "${HOME}/.cache/mise" \
-    "${HOME}/.cargo/bin" \
-    "${HOME}/.cargo/registry" \
-    "${HOME}/.cargo/git"
+    "${mise_archive}" --version | grep -Fq "mise ${MISE_VERSION}"; \
+    mkdir -p \
+        "${HOME}/.cache/amp" \
+        "${HOME}/.cache/mise" \
+        "${HOME}/.cargo/bin" \
+        "${HOME}/.cargo/registry" \
+        "${HOME}/.cargo/git"
 
 # Per-tool RUNs (caching).
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
@@ -91,10 +92,18 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     case "${TARGETARCH}" in \
         amd64) ;; \
         arm64) \
-            MISE_EXEC_AUTO_INSTALL=0 MISE_CARGO_BINSTALL_ONLY=1 CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
-                mise exec -- mbx install --locked --root "${HOME}/.local/share/mise/installs/cargo-fuzz/${CARGO_FUZZ_VERSION}" "cargo-fuzz@${CARGO_FUZZ_VERSION}"; \
-            MISE_EXEC_AUTO_INSTALL=0 MISE_CARGO_BINSTALL_ONLY=1 CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
-                mise exec -- mbx install --locked --root "${HOME}/.local/share/mise/installs/cargo-mutants/${CARGO_MUTANTS_VERSION}" "cargo-mutants@${CARGO_MUTANTS_VERSION}"; \
+            MISE_EXEC_AUTO_INSTALL=0 \
+            MISE_CARGO_BINSTALL_ONLY=1 \
+            CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
+                mise exec -- mbx install --locked \
+                    --root "${HOME}/.local/share/mise/installs/cargo-fuzz/${CARGO_FUZZ_VERSION}" \
+                    "cargo-fuzz@${CARGO_FUZZ_VERSION}"; \
+            MISE_EXEC_AUTO_INSTALL=0 \
+            MISE_CARGO_BINSTALL_ONLY=1 \
+            CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
+                mise exec -- mbx install --locked \
+                    --root "${HOME}/.local/share/mise/installs/cargo-mutants/${CARGO_MUTANTS_VERSION}" \
+                    "cargo-mutants@${CARGO_MUTANTS_VERSION}"; \
             test -x "${HOME}/.local/share/mise/installs/cargo-fuzz/${CARGO_FUZZ_VERSION}/bin/cargo-fuzz"; \
             test -x "${HOME}/.local/share/mise/installs/cargo-mutants/${CARGO_MUTANTS_VERSION}/bin/cargo-mutants" \
             ;; \
@@ -243,18 +252,18 @@ RUN . ~/.profile && set -eu; \
     DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a kimi-code-cli --yes --global; \
     test -f "${HOME}/.claude/skills/improve/SKILL.md"; \
     test -f "${HOME}/.agents/skills/improve/SKILL.md"; \
-    rm -rf "${source_root}" "${npm_home}" "${npm_config_dir}" /tmp/architect-npm-cache /tmp/architect-git-home
+    rm -rf "${source_root}" "${npm_home}" "${npm_config_dir}" /tmp/architect-npm-cache /tmp/architect-git-home; \
+    mkdir -p \
+        /home/agent/.config/caveman \
+        /home/agent/.claude \
+        /home/agent/.codex \
+        /home/agent/.config/amp \
+        /home/agent/.kimi-code \
+        /home/agent/.grok
 
 # ── Token-optimisation stack ──────────────────────────────────────────────────
 
 # AGENTS.md setup.
-RUN mkdir -p \
-    /home/agent/.config/caveman \
-    /home/agent/.claude \
-    /home/agent/.codex \
-    /home/agent/.config/amp \
-    /home/agent/.kimi-code \
-    /home/agent/.grok
 ENV CAVEMAN_DEFAULT_MODE=ultra
 COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
 COPY --chown=agent:agent --chmod=644 AGENTS.md.d/ /tmp/AGENTS.md.d/
