@@ -97,10 +97,9 @@ RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     mise use -g --pin -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise --tool-option mr_boxington=true rust "mr-boxington@${MBX_VERSION}"
 
-# Cargo-binstall queries GitHub's API while resolving release assets. Install
-# verified sccache archives directly. Fetch the other locked crate archives
-# from crates.io and use MBX path installs so compilation remains cached. The
-# archive hashes below match the crates.io index records for these versions.
+# Install checksum-verified upstream binaries for the pinned Cargo tools.
+# cargo-fuzz and cargo-mutants lack ARM64 release assets, so that platform uses
+# MBX path installs from locked, checksum-verified crates.io sources.
 RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     --mount=type=cache,target=/home/agent/.cache/cargo-target-${TARGETARCH},uid=1000 \
@@ -134,22 +133,167 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
         "${sccache_root}/sccache"; \
     test -x "${sccache_root}/sccache"; \
     rm -rf "${sccache_unpack}" "${sccache_archive}"; \
+    install_prebuilt_cargo_tool() { \
+        package="$1"; \
+        version="$2"; \
+        case "${package}@${version}:${TARGETARCH}" in \
+            cargo-audit@0.22.2:amd64) \
+                asset_repo=rustsec/rustsec; release_path=cargo-audit/v0.22.2; \
+                asset_filename=cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz; \
+                asset_sha256=ab28a1bdb54db4d5d8ad5981cf1f959410370b3d28250dbd35f6a44248620e39; \
+                executable_member=cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit \
+                ;; \
+            cargo-audit@0.22.2:arm64) \
+                asset_repo=rustsec/rustsec; release_path=cargo-audit/v0.22.2; \
+                asset_filename=cargo-audit-aarch64-unknown-linux-gnu-v0.22.2.tgz; \
+                asset_sha256=c6603814ddaa45e51263dafd31c0ac98808f688d26f7395804f9670b0fd599dd; \
+                executable_member=cargo-audit-aarch64-unknown-linux-gnu-v0.22.2/cargo-audit \
+                ;; \
+            cargo-deny@0.20.2:amd64) \
+                asset_repo=EmbarkStudios/cargo-deny; release_path=0.20.2; \
+                asset_filename=cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz; \
+                asset_sha256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f; \
+                executable_member=cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny \
+                ;; \
+            cargo-deny@0.20.2:arm64) \
+                asset_repo=EmbarkStudios/cargo-deny; release_path=0.20.2; \
+                asset_filename=cargo-deny-0.20.2-aarch64-unknown-linux-musl.tar.gz; \
+                asset_sha256=995c82be0defc7a025cae49a2aa2644ce8245c9a3318fc4103907c6a285e8c7d; \
+                executable_member=cargo-deny-0.20.2-aarch64-unknown-linux-musl/cargo-deny \
+                ;; \
+            cargo-dylint@6.0.4:amd64) \
+                asset_repo=trailofbits/dylint; release_path=v6.0.4; \
+                asset_filename=cargo-dylint-x86_64-unknown-linux-gnu-v6.0.4.tar.gz; \
+                asset_sha256=14195423ac6bfe6b055ffa94e0c48e282e1f5997abd98dfb4ea8bdf4633aec5c; \
+                executable_member=cargo-dylint-x86_64-unknown-linux-gnu-v6.0.4/cargo-dylint \
+                ;; \
+            cargo-dylint@6.0.4:arm64) \
+                asset_repo=trailofbits/dylint; release_path=v6.0.4; \
+                asset_filename=cargo-dylint-aarch64-unknown-linux-gnu-v6.0.4.tar.gz; \
+                asset_sha256=76bea6b65babdbc6d1d96b15b89e731c0afba83338999c0f81a34d3dfd8d8508; \
+                executable_member=cargo-dylint-aarch64-unknown-linux-gnu-v6.0.4/cargo-dylint \
+                ;; \
+            cargo-fuzz@0.13.2:amd64) \
+                asset_repo=rust-fuzz/cargo-fuzz; release_path=0.13.2; \
+                asset_filename=cargo-fuzz-0.13.2-x86_64-unknown-linux-musl.tar.gz; \
+                asset_sha256=b5b704018b63e0f151c17a057ac53b5111e1db545d1b9f72fee79f08a545931c; \
+                executable_member=cargo-fuzz \
+                ;; \
+            cargo-hack@0.6.45:amd64) \
+                asset_repo=taiki-e/cargo-hack; release_path=v0.6.45; \
+                asset_filename=cargo-hack-x86_64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=16394b932180a4ae509a22b3b8294fc2525573d8592420133c428457ed676d5d; \
+                executable_member=cargo-hack \
+                ;; \
+            cargo-hack@0.6.45:arm64) \
+                asset_repo=taiki-e/cargo-hack; release_path=v0.6.45; \
+                asset_filename=cargo-hack-aarch64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=821536b7dc4666764d36c09e665affcf98e3d69f5a99b171c03d47d3ec24d0e7; \
+                executable_member=cargo-hack \
+                ;; \
+            cargo-hakari@0.9.38:amd64) \
+                asset_repo=guppy-rs/guppy; release_path=cargo-hakari-0.9.38; \
+                asset_filename=cargo-hakari-0.9.38-x86_64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=19fcbaf488dd51b4b0fe2412d8da37c65ba6aa72349351ba73f6c9f7c1087e04; \
+                executable_member=cargo-hakari \
+                ;; \
+            cargo-hakari@0.9.38:arm64) \
+                asset_repo=guppy-rs/guppy; release_path=cargo-hakari-0.9.38; \
+                asset_filename=cargo-hakari-0.9.38-aarch64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=0076ddafb28c373125b30a8c04d6f4b7e4b59bf141fd51b6f47f89dc66922d34; \
+                executable_member=cargo-hakari \
+                ;; \
+            cargo-llvm-cov@0.8.7:amd64) \
+                asset_repo=taiki-e/cargo-llvm-cov; release_path=v0.8.7; \
+                asset_filename=cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168; \
+                executable_member=cargo-llvm-cov \
+                ;; \
+            cargo-llvm-cov@0.8.7:arm64) \
+                asset_repo=taiki-e/cargo-llvm-cov; release_path=v0.8.7; \
+                asset_filename=cargo-llvm-cov-aarch64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=8f399d84993d13998b63fbe1084377713c719b00655c7d88d5b56c8c29105d90; \
+                executable_member=cargo-llvm-cov \
+                ;; \
+            cargo-mutants@27.1.0:amd64) \
+                asset_repo=sourcefrog/cargo-mutants; release_path=v27.1.0; \
+                asset_filename=cargo-mutants-x86_64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=dfe6dc37d0342c891d2829b5a695aa57c2d0edecef7e7d0399a30cc6e206411e; \
+                executable_member=cargo-mutants \
+                ;; \
+            cargo-shear@1.13.4:amd64) \
+                asset_repo=Boshen/cargo-shear; release_path=v1.13.4; \
+                asset_filename=cargo-shear-x86_64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=b52ad836fb99fb3881862d71bd965b9937b55da363f775d71d846244e580a50c; \
+                executable_member=cargo-shear \
+                ;; \
+            cargo-shear@1.13.4:arm64) \
+                asset_repo=Boshen/cargo-shear; release_path=v1.13.4; \
+                asset_filename=cargo-shear-aarch64-unknown-linux-gnu.tar.gz; \
+                asset_sha256=fadb98dc4f467bb62223d33b7f7b25b219f7df12d34d1a6d7b9486bd8d5c9584; \
+                executable_member=cargo-shear \
+                ;; \
+            cargo-zigbuild@0.23.0:amd64) \
+                asset_repo=rust-cross/cargo-zigbuild; release_path=v0.23.0; \
+                asset_filename=cargo-zigbuild-x86_64-unknown-linux-gnu.tar.xz; \
+                asset_sha256=c636e4f72b6f40a40ddf0414c8c6056f78b87eea3be0edf01f08d65fa028a373; \
+                executable_member=cargo-zigbuild-x86_64-unknown-linux-gnu/cargo-zigbuild \
+                ;; \
+            cargo-zigbuild@0.23.0:arm64) \
+                asset_repo=rust-cross/cargo-zigbuild; release_path=v0.23.0; \
+                asset_filename=cargo-zigbuild-aarch64-unknown-linux-gnu.tar.xz; \
+                asset_sha256=5917d5416884cba0f23c2653016f7f2df2ec04e74eb6b259598fecc066f8c429; \
+                executable_member=cargo-zigbuild-aarch64-unknown-linux-gnu/cargo-zigbuild \
+                ;; \
+            codebook-lsp@0.3.42:amd64) \
+                asset_repo=blopker/codebook; release_path=v0.3.42; \
+                asset_filename=codebook-lsp-x86_64-unknown-linux-musl.tar.gz; \
+                asset_sha256=979b9a92f7a433c8830b51783dd06aab1d2668aee991c22d42560b593d291f9c; \
+                executable_member=codebook-lsp \
+                ;; \
+            codebook-lsp@0.3.42:arm64) \
+                asset_repo=blopker/codebook; release_path=v0.3.42; \
+                asset_filename=codebook-lsp-aarch64-unknown-linux-musl.tar.gz; \
+                asset_sha256=5f1448369447f0f61e407e0082cd72a89f2ea7e47e3c45692b910a9b03adb6fe; \
+                executable_member=codebook-lsp \
+                ;; \
+            dylint-link@6.0.4:amd64) \
+                asset_repo=trailofbits/dylint; release_path=v6.0.4; \
+                asset_filename=dylint-link-x86_64-unknown-linux-gnu-v6.0.4.tar.gz; \
+                asset_sha256=54ce515583ade02b197bc11f6870fd755c30e04b7e44ea015a507726de05fa1d; \
+                executable_member=dylint-link-x86_64-unknown-linux-gnu-v6.0.4/dylint-link \
+                ;; \
+            dylint-link@6.0.4:arm64) \
+                asset_repo=trailofbits/dylint; release_path=v6.0.4; \
+                asset_filename=dylint-link-aarch64-unknown-linux-gnu-v6.0.4.tar.gz; \
+                asset_sha256=dd33dd207272cdafab494089239587f93ab2b6b2af18312281b6754b24a1db13; \
+                executable_member=dylint-link-aarch64-unknown-linux-gnu-v6.0.4/dylint-link \
+                ;; \
+            *) echo "unsupported pinned prebuilt Cargo tool: ${package}@${version}:${TARGETARCH}" >&2; return 1 ;; \
+        esac; \
+        asset_url="https://github.com/${asset_repo}/releases/download/${release_path}/${asset_filename}"; \
+        archive="/tmp/${package}-${version}-${TARGETARCH}.archive"; \
+        binary="/tmp/${package}-${version}-${TARGETARCH}"; \
+        curl -q -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --netrc-file /dev/null "${asset_url}" -o "${archive}"; \
+        printf '%s  %s\n' "${asset_sha256}" "${archive}" | sha256sum --check --strict -; \
+        case "${asset_url}" in \
+            *.tar.xz) tar --extract --xz --file "${archive}" --to-stdout --no-wildcards -- "${executable_member}" > "${binary}" ;; \
+            *) tar --extract --gzip --file "${archive}" --to-stdout --no-wildcards -- "${executable_member}" > "${binary}" ;; \
+        esac; \
+        test -s "${binary}"; \
+        install_root="${HOME}/.local/share/mise/installs/${package}/${version}/bin"; \
+        mkdir -p "${install_root}"; \
+        install -m 0755 "${binary}" "${install_root}/${package}"; \
+        test -x "${install_root}/${package}"; \
+        rm -f "${binary}" "${archive}"; \
+    }; \
     install_mbx_cargo_tool() { \
         package="$1"; \
         version="$2"; \
         case "${package}@${version}" in \
-            cargo-audit@0.22.2) crate_sha256=700c2b240f7fd330c24b675fe429f73a5b676531fcc6300400b2b67f155ba12a ;; \
-            cargo-deny@0.20.2) crate_sha256=e528dfcbe739af7ce37a77d3d6df1b29dd6887b1c701d888820c0f16b864f737 ;; \
-            cargo-dylint@6.0.4) crate_sha256=93782091fc2b6982aad8d610fa4f3ce40dce417a3b7c63f7836e409ff599d2d7 ;; \
             cargo-fuzz@0.13.2) crate_sha256=5acfd01930e49823e58c30dd8012d3338a620377d7c7d4cc140ca4b2169400e2 ;; \
-            cargo-hack@0.6.45) crate_sha256=3570c04182c76b68872933e4b8d72d72d664b177c9b76a40e8808f840ba82996 ;; \
-            cargo-hakari@0.9.38) crate_sha256=4a4622babda50818065ec5b40902513fa74d96fafef9613cf5af23728593c4fa ;; \
-            cargo-llvm-cov@0.8.7) crate_sha256=dbb60793c145d8ef09b5cfa49c2f2890b93bde5a13885a9369654ca87dddfe7f ;; \
             cargo-mutants@27.1.0) crate_sha256=07072e7bcdeb425d5e5fdbfd9f15a2c749e23cb2edf5ef40aee5876760ae1cf9 ;; \
-            cargo-shear@1.13.4) crate_sha256=d593f2faa41608b68b5d0aeab4f66eac3b52afadeb7e066626e3042dfbdcbf20 ;; \
-            cargo-zigbuild@0.23.0) crate_sha256=68c7df45b9d9934aaed5987fbf422b31419f81827b13a52251a61e1e772c6ff7 ;; \
-            codebook-lsp@0.3.42) crate_sha256=8a0313cfd268e08d858d771b6404375637921c543c751a08d8eb4612a73e6946 ;; \
-            dylint-link@6.0.4) crate_sha256=993baebfc3e9df560d5eb51c4ee7bfe43ce58244179b628a474d5b6e96ad316a ;; \
             *) echo "unsupported pinned Cargo source: ${package}@${version}" >&2; exit 1 ;; \
         esac; \
         install_root="${HOME}/.local/share/mise/installs/${package}/${version}"; \
@@ -173,18 +317,27 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
         test -x "${install_root}/bin/${package}"; \
         rm -rf "${source_root}" "${source_archive}"; \
     }; \
-    install_mbx_cargo_tool cargo-audit "${CARGO_AUDIT_VERSION}"; \
-    install_mbx_cargo_tool cargo-deny "${CARGO_DENY_VERSION}"; \
-    install_mbx_cargo_tool cargo-dylint "${CARGO_DYLINT_VERSION}"; \
-    install_mbx_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
-    install_mbx_cargo_tool cargo-hack "${CARGO_HACK_VERSION}"; \
-    install_mbx_cargo_tool cargo-hakari "${CARGO_HAKARI_VERSION}"; \
-    install_mbx_cargo_tool cargo-llvm-cov "${CARGO_LLVM_COV_VERSION}"; \
-    install_mbx_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}"; \
-    install_mbx_cargo_tool cargo-shear "${CARGO_SHEAR_VERSION}"; \
-    install_mbx_cargo_tool cargo-zigbuild "${CARGO_ZIGBUILD_VERSION}"; \
-    install_mbx_cargo_tool codebook-lsp "${CODEBOOK_LSP_VERSION}"; \
-    install_mbx_cargo_tool dylint-link "${DYLINT_LINK_VERSION}"
+    install_prebuilt_cargo_tool cargo-audit "${CARGO_AUDIT_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-deny "${CARGO_DENY_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-dylint "${CARGO_DYLINT_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-hack "${CARGO_HACK_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-hakari "${CARGO_HAKARI_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-llvm-cov "${CARGO_LLVM_COV_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-shear "${CARGO_SHEAR_VERSION}"; \
+    install_prebuilt_cargo_tool cargo-zigbuild "${CARGO_ZIGBUILD_VERSION}"; \
+    install_prebuilt_cargo_tool codebook-lsp "${CODEBOOK_LSP_VERSION}"; \
+    install_prebuilt_cargo_tool dylint-link "${DYLINT_LINK_VERSION}"; \
+    case "${TARGETARCH}" in \
+        amd64) \
+            install_prebuilt_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
+            install_prebuilt_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}" \
+            ;; \
+        arm64) \
+            install_mbx_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
+            install_mbx_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}" \
+            ;; \
+        *) echo "unsupported TARGETARCH for Cargo tool installation: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac
 
 # BoltFFI publishes verified x64 and ARM64 release binaries with custom names.
 RUN set -eu; \
