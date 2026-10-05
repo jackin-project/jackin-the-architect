@@ -1,6 +1,6 @@
 # The Architect
 
-**The Architect** is the jackin agent role for developing [jackin](https://github.com/donbeave/jackin) itself (role identifier `the-architect`). It provides the Rust development environment needed to build and test the jackin CLI.
+**The Architect** is the jackin agent role for developing [jackin](https://github.com/jackin-project/jackin) itself (role identifier `the-architect`). It provides the Rust development environment needed to build and test the jackin CLI.
 
 `jackin` validates this repo's Dockerfile, derives the final image itself, and mounts the cached repo checkout into `/workspace` when you run:
 
