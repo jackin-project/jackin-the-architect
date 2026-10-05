@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -17,7 +18,8 @@ import sys
 import tempfile
 import time
 import uuid
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Callable, Sequence
 
 
 CONTEXT_EXACT_FILES = frozenset(
@@ -107,6 +109,24 @@ RUNTIME_TMPFS = "/tmp:rw,noexec,nosuid,nodev,size=2g"
 RUNTIME_HOME = "/home/agent"
 PROBE_ROOT = "/home/agent/.cache/architect-image-probe"
 NATIVE_IMAGE_TASK_ID = "architect-arm64-image"
+OWNER_ENV_KEY = "ARCHITECT_IMAGE_VALIDATION_OWNER"
+OWNER_LABEL_KEY = "org.jackin.architect-arm64-validation.owner"
+
+
+@dataclass
+class OwnedDockerResources:
+    """Names, token, and IDs for only this invocation's Docker resources."""
+
+    owner_token: str
+    builder: str
+    container_name: str
+    image_tag: str
+    builder_creation_attempted: bool = False
+    builder_container_id: str | None = None
+    runtime_creation_attempted: bool = False
+    runtime_container_id: str | None = None
+    image_build_attempted: bool = False
+    image_id: str | None = None
 
 
 class ValidationError(RuntimeError):
@@ -209,6 +229,57 @@ def path_is_allowed(path: str) -> bool:
     )
 
 
+def decode_tree_entry(record: bytes) -> tuple[str, str, str, str]:
+    try:
+        metadata, raw_path = record.split(b"\t", 1)
+        mode_bytes, kind_bytes, oid_bytes = metadata.split(b" ")
+        name = raw_path.decode("utf-8", "strict")
+        mode = mode_bytes.decode("ascii")
+        kind = kind_bytes.decode("ascii")
+        oid = oid_bytes.decode("ascii")
+    except ValueError as error:
+        raise ValidationError(f"malformed raw Git tree record: {record!r}") from error
+    return name, mode, kind, oid
+
+
+def validate_context_entry(
+    name: str, mode: str, kind: str, oid: str, object_format: str, seen: set[str]
+) -> PurePosixPath:
+    path = PurePosixPath(name)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise ValidationError(f"unsafe path in source tree: {name!r}")
+    if not path_is_allowed(name) or name in seen:
+        raise ValidationError(f"unexpected or duplicate context path: {name}")
+    if kind != "blob" or mode not in {"100644", "100755"}:
+        raise ValidationError(f"unsupported context entry: {mode} {kind} {name}")
+    object_id_length = {"sha1": 40, "sha256": 64}.get(object_format)
+    if len(oid) != object_id_length:
+        raise ValidationError(f"blob ID does not match Git object format: {name}")
+    return path
+
+
+def write_context_blob(
+    repo: Path,
+    path: PurePosixPath,
+    mode: str,
+    oid: str,
+    object_format: str,
+    destination: Path,
+    git_home: Path,
+) -> None:
+    data = git_bytes(repo, ["cat-file", "blob", oid], git_home)
+    if git_object_digest("blob", data, object_format) != oid:
+        raise ValidationError(f"raw blob bytes do not match tree entry: {path.as_posix()}")
+    target = destination.joinpath(*path.parts)
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    file_mode = 0o755 if mode == "100755" else 0o644
+    descriptor = os.open(target, flags, file_mode)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(data)
+    target.chmod(file_mode)
+
+
 def materialize_tree_context(
     repo: Path, tree: str, object_format: str, destination: Path, git_home: Path
 ) -> dict[str, object]:
@@ -225,40 +296,35 @@ def materialize_tree_context(
     for record in listing.split(b"\0"):
         if not record:
             continue
-        try:
-            metadata, raw_path = record.split(b"\t", 1)
-            mode_bytes, kind_bytes, oid_bytes = metadata.split(b" ")
-            name = raw_path.decode("utf-8", "strict")
-            mode = mode_bytes.decode("ascii")
-            kind = kind_bytes.decode("ascii")
-            oid = oid_bytes.decode("ascii")
-        except (ValueError, UnicodeError) as error:
-            raise ValidationError(f"malformed raw Git tree record: {record!r}") from error
-        path = PurePosixPath(name)
-        if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-            raise ValidationError(f"unsafe path in source tree: {name!r}")
-        if not path_is_allowed(name) or name in seen:
-            raise ValidationError(f"unexpected or duplicate context path: {name}")
-        if kind != "blob" or mode not in {"100644", "100755"}:
-            raise ValidationError(f"unsupported context entry: {mode} {kind} {name}")
-        if len(oid) != {"sha1": 40, "sha256": 64}.get(object_format):
-            raise ValidationError(f"blob ID does not match Git object format: {name}")
-        data = git_bytes(repo, ["cat-file", "blob", oid], git_home)
-        if git_object_digest("blob", data, object_format) != oid:
-            raise ValidationError(f"raw blob bytes do not match tree entry: {name}")
-        target = destination.joinpath(*path.parts)
-        target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        file_mode = 0o755 if mode == "100755" else 0o644
-        descriptor = os.open(target, flags, file_mode)
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-        target.chmod(file_mode)
+        name, mode, kind, oid = decode_tree_entry(record)
+        path = validate_context_entry(name, mode, kind, oid, object_format, seen)
+        write_context_blob(repo, path, mode, oid, object_format, destination, git_home)
         seen.add(name)
     missing = CONTEXT_REQUIRED_FILES - seen
     if missing:
         raise ValidationError(f"required source paths absent from tree: {sorted(missing)}")
     return context_manifest(destination)
+
+
+def context_directory_allowed(relative: str) -> bool:
+    return any(
+        relative == prefix.rstrip("/") or relative.startswith(prefix)
+        for prefix in CONTEXT_PREFIXES
+    ) or relative in {"maintained-image-build", "maintained-image-build/skills-cli"}
+
+
+def context_manifest_entry(destination: Path, path: Path) -> dict[str, object] | None:
+    relative = path.relative_to(destination).as_posix()
+    if path.is_symlink():
+        raise ValidationError(f"symlink in raw context: {relative}")
+    if path.is_dir():
+        if not context_directory_allowed(relative):
+            raise ValidationError(f"unexpected context directory: {relative}")
+        return None
+    if not path_is_allowed(relative):
+        raise ValidationError(f"unexpected context file: {relative}")
+    mode = stat.S_IMODE(path.stat().st_mode)
+    return {"path": relative, "mode": f"{mode:04o}", "sha256": sha256_file(path)}
 
 
 def context_manifest(destination: Path) -> dict[str, object]:
@@ -267,22 +333,9 @@ def context_manifest(destination: Path) -> dict[str, object]:
         directory_names.sort()
         file_names.sort()
         for name in [*directory_names, *file_names]:
-            path = Path(current) / name
-            relative = path.relative_to(destination).as_posix()
-            if path.is_symlink():
-                raise ValidationError(f"symlink in raw context: {relative}")
-            if path.is_dir():
-                allowed_directory = any(
-                    relative == prefix.rstrip("/") or relative.startswith(prefix)
-                    for prefix in CONTEXT_PREFIXES
-                ) or relative in {"maintained-image-build", "maintained-image-build/skills-cli"}
-                if not allowed_directory:
-                    raise ValidationError(f"unexpected context directory: {relative}")
-                continue
-            if not path_is_allowed(relative):
-                raise ValidationError(f"unexpected context file: {relative}")
-            mode = stat.S_IMODE(path.stat().st_mode)
-            entries.append({"path": relative, "mode": f"{mode:04o}", "sha256": sha256_file(path)})
+            entry = context_manifest_entry(destination, Path(current) / name)
+            if entry is not None:
+                entries.append(entry)
     payload = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
     return {"files": entries, "manifest_sha256": sha256_bytes(payload)}
 
@@ -314,8 +367,8 @@ def validate_dockerfile_contract(dockerfile: Path) -> None:
         or "amd64)" not in route
         or "arm64)" not in route
         or not re.search(
-            r'arm64\).*install_mbx_cargo_tool cargo-fuzz "\$\{CARGO_FUZZ_VERSION\}"; '
-            r'.*install_mbx_cargo_tool cargo-mutants "\$\{CARGO_MUTANTS_VERSION\}"',
+            r'arm64\).*install_mbx_cargo_tool cargo-fuzz "\$\{(?:CARGO_FUZZ_VERSION|cargo_fuzz_version)\}"; '
+            r'.*install_mbx_cargo_tool cargo-mutants "\$\{(?:CARGO_MUTANTS_VERSION|cargo_mutants_version)\}"',
             route,
         )
     ):
@@ -359,7 +412,16 @@ def parse_buildx_plugin_info(output: str) -> dict[str, str]:
     return {"path": path, "version": version}
 
 
-def make_builder_create_argv(docker: Path, builder: str) -> list[str]:
+def validate_owner_token(owner_token: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{32}", owner_token):
+        raise ValidationError("task ownership token must be 128-bit lowercase hex")
+    return owner_token
+
+
+def make_builder_create_argv(
+    docker: Path, builder: str, owner_token: str
+) -> list[str]:
+    owner_token = validate_owner_token(owner_token)
     return [
         str(docker),
         "buildx",
@@ -374,16 +436,19 @@ def make_builder_create_argv(docker: Path, builder: str) -> list[str]:
         f"cpu-quota={BUILD_CPU_QUOTA}",
         "--driver-opt",
         f"cpu-period={BUILD_CPU_PERIOD}",
+        "--driver-opt",
+        f"env.{OWNER_ENV_KEY}={owner_token}",
         "--bootstrap",
     ]
 
 
-def make_builder_name(run_id: str, attempt: str) -> str:
-    if not re.fullmatch(r"[1-9][0-9]{0,19}", run_id):
+def make_builder_name(run_id: str, attempt: str, owner_token: str) -> str:
+    owner_token = validate_owner_token(owner_token)
+    if not re.fullmatch(r"[1-9]\d{0,19}", run_id, flags=re.ASCII):
         raise ValidationError("GITHUB_RUN_ID must be a positive decimal identifier")
-    if not re.fullmatch(r"[1-9][0-9]{0,5}", attempt):
+    if not re.fullmatch(r"[1-9]\d{0,5}", attempt, flags=re.ASCII):
         raise ValidationError("GITHUB_RUN_ATTEMPT must be a positive decimal identifier")
-    name = f"vlnr-{run_id}-{attempt}-{NATIVE_IMAGE_TASK_ID}"
+    name = f"vlnr-{run_id}-{attempt}-arm64-{owner_token[:24]}"
     if len(name) > 63:
         raise ValidationError("task-owned Buildx builder name exceeds the supported length")
     return name
@@ -393,7 +458,10 @@ def make_builder_remove_argv(docker: Path, builder: str) -> list[str]:
     return [str(docker), "buildx", "rm", "--force", builder]
 
 
-def make_build_argv(docker: Path, builder: str, tag: str, context: Path) -> list[str]:
+def make_build_argv(
+    docker: Path, builder: str, tag: str, context: Path, owner_token: str
+) -> list[str]:
+    owner_token = validate_owner_token(owner_token)
     return [
         str(docker),
         "buildx",
@@ -407,6 +475,8 @@ def make_build_argv(docker: Path, builder: str, tag: str, context: Path) -> list
         "--load",
         "--tag",
         tag,
+        "--label",
+        f"{OWNER_LABEL_KEY}={owner_token}",
         "--file",
         str(context / "Dockerfile"),
         "--progress=plain",
@@ -424,19 +494,24 @@ def make_build_argv(docker: Path, builder: str, tag: str, context: Path) -> list
     ]
 
 
-def make_container_name(run_id: str, attempt: str) -> str:
-    make_builder_name(run_id, attempt)
-    return f"architect-{run_id}-{attempt}-{NATIVE_IMAGE_TASK_ID}"
+def make_container_name(run_id: str, attempt: str, owner_token: str) -> str:
+    make_builder_name(run_id, attempt, owner_token)
+    return f"architect-{run_id}-{attempt}-{NATIVE_IMAGE_TASK_ID}-{owner_token}"
 
 
-def make_probe_create_argv(docker: Path, image_id: str, container_name: str) -> list[str]:
+def make_probe_create_argv(
+    docker: Path, image_id: str, container_name: str, owner_token: str
+) -> list[str]:
     validate_image_id(image_id)
+    owner_token = validate_owner_token(owner_token)
     return [
         str(docker),
         "create",
         "--interactive",
         "--name",
         container_name,
+        "--label",
+        f"{OWNER_LABEL_KEY}={owner_token}",
         "--network=none",
         f"--platform={BUILD_PLATFORM}",
         "--cpus=1",
@@ -462,6 +537,23 @@ def make_probe_create_argv(docker: Path, image_id: str, container_name: str) -> 
 
 def make_probe_start_argv(docker: Path, container_id: str) -> list[str]:
     return [str(docker), "start", "--attach", "--interactive", validate_container_id(container_id)]
+
+
+def attempt_owned_creation(
+    resources: OwnedDockerResources,
+    kind: str,
+    operation: Callable[[], int],
+) -> int:
+    fields = {
+        "builder": "builder_creation_attempted",
+        "runtime": "runtime_creation_attempted",
+        "image": "image_build_attempted",
+    }
+    field = fields.get(kind)
+    if field is None:
+        raise ValidationError(f"unsupported owned Docker creation operation: {kind}")
+    setattr(resources, field, True)
+    return operation()
 
 
 def validate_image_id(image_id: str) -> str:
@@ -498,6 +590,7 @@ def make_probe_script() -> bytes:
 set -euo pipefail
 export MISE_EXEC_AUTO_INSTALL=0 MISE_JOBS={MISE_JOBS} CARGO_BUILD_JOBS={BUILD_JOBS}
 PROBE_ROOT="{PROBE_ROOT}"
+RUNTIME_HOME="{RUNTIME_HOME}"
 die() {{ echo "IMAGE_CHECK_FAIL: $*" >&2; exit 1; }}
 printf 'IMAGE_ID uid=%s gid=%s groups=%s\\n' "$(id -u)" "$(id -g)" "$(id -G)"
 test "$(id -u)" = 1000 || die 'unexpected image UID'
@@ -607,11 +700,17 @@ process.stdout.write([r.version,r.hits,r.misses,r.unconsulted,r.verifications,b,
   total=$((hits + misses + unconsulted + verifications + bypasses))
   test "$schema" = 5 && test "$total" -gt 0 || die "$label stats summary invalid"
   printf 'MBX_STATS %s schema=%s hits=%s misses=%s unconsulted=%s verifications=%s bypasses=%s reasons=%s sha256=%s\\n' "$label" "$schema" "$hits" "$misses" "$unconsulted" "$verifications" "$bypasses" "$reasons" "$digest"
-  MBX_HITS=$((MBX_HITS + hits))
+  MBX_LAST_HITS="$hits"
+  MBX_LAST_MISSES="$misses"
+  MBX_LAST_UNCONSULTED="$unconsulted"
+  MBX_LAST_BYPASSES="$bypasses"
 }}
-MBX_HITS=0
+MBX_CACHE_DIR="$PROBE_ROOT/explicit-mbx-store"
+mkdir "$MBX_CACHE_DIR"
+export MBX_CACHE_DIR
 write_bin_fixture() {{
-  local name="$1" message="$2" root="$PROBE_ROOT/$name"
+  local name="$1" message="$2"
+  local root="$PROBE_ROOT/$name"
   mkdir -p "$root/src"
   cat > "$root/Cargo.toml" <<EOF
 [package]
@@ -631,7 +730,8 @@ fn main() {{ println!("$message"); }}
 EOF
 }}
 write_lib_fixture() {{
-  local name="$1" root="$PROBE_ROOT/$1"
+  local name="$1"
+  local root="$PROBE_ROOT/$name"
   mkdir -p "$root/src"
   cat > "$root/Cargo.toml" <<EOF
 [package]
@@ -650,7 +750,6 @@ EOF
 pub fn marker() -> &'static str {{ "$name" }}
 EOF
 }}
-MBX_HITS=0
 write_bin_fixture architect_arm64_mbx_probe MBX_ARM64_EXPLICIT_OK
 explicit_stats="$PROBE_ROOT/explicit-stats.json"
 rm -f -- "$explicit_stats"
@@ -665,6 +764,13 @@ test -x "$binary" || die 'explicit MBX build did not create an executable'
 test "$("$binary")" = MBX_ARM64_EXPLICIT_OK || die 'explicit MBX binary output differs'
 write_lib_fixture architect_arm64_mise_cargo_probe
 wrapper_target="$PROBE_ROOT/target-wrapper"
+MBX_CACHE_DIR="$PROBE_ROOT/wrapper-mbx-store"
+mkdir "$MBX_CACHE_DIR"
+export MBX_CACHE_DIR
+test -z "$(find "$MBX_CACHE_DIR" -mindepth 1 -print -quit)" || die 'wrapper MBX store is not empty before cold build'
+resolved_mbx_cache="$(mise exec --deny-net -- mbx cache dir)"
+test "$resolved_mbx_cache" = "$MBX_CACHE_DIR" || die "MBX ignored the private cache root: $resolved_mbx_cache"
+printf 'MBX_CACHE_ROOT %s\\n' "$resolved_mbx_cache"
 cold_stats="$PROBE_ROOT/wrapper-cold.json"
 rm -f -- "$cold_stats"
 (
@@ -673,8 +779,12 @@ rm -f -- "$cold_stats"
     mise exec --deny-net -- cargo check --lib --locked --offline --manifest-path "$PROBE_ROOT/architect_arm64_mise_cargo_probe/Cargo.toml"
 )
 check_stats "$cold_stats" wrapper-cold
+test "$MBX_LAST_HITS" = 0 || die 'cold MBX store unexpectedly hit before any wrapper compile'
+test "$((MBX_LAST_MISSES + MBX_LAST_UNCONSULTED))" -gt 0 || die 'cold wrapper compile had no MBX miss or unconsulted action'
+metadata="$(find "$wrapper_target/debug/deps" -maxdepth 1 -type f -name 'libarchitect_arm64_mise_cargo_probe-*.rmeta' -print -quit)"
+test -n "$metadata" || die 'cold native wrapper compile did not create metadata'
+printf 'MBX_COLD_COMPILE PASS hits=%s misses=%s unconsulted=%s\\n' "$MBX_LAST_HITS" "$MBX_LAST_MISSES" "$MBX_LAST_UNCONSULTED"
 rm -rf -- "$wrapper_target"
-hits_before_warm="$MBX_HITS"
 warm_stats="$PROBE_ROOT/wrapper-warm.json"
 rm -f -- "$warm_stats"
 (
@@ -683,17 +793,22 @@ rm -f -- "$warm_stats"
     mise exec --deny-net -- cargo check --lib --locked --offline --manifest-path "$PROBE_ROOT/architect_arm64_mise_cargo_probe/Cargo.toml"
 )
 check_stats "$warm_stats" wrapper-warm
-test "$MBX_HITS" -gt "$hits_before_warm" || die 'fresh-target repeat produced no MBX cache hit'
+test "$MBX_LAST_HITS" -gt 0 || die 'fresh-target repeat produced no MBX cache hit'
 metadata="$(find "$wrapper_target/debug/deps" -maxdepth 1 -type f -name 'libarchitect_arm64_mise_cargo_probe-*.rmeta' -print -quit)"
 test -n "$metadata" || die 'wrapped cargo check did not create metadata'
-printf 'MBX_WARM_CACHE_HIT PASS hits=%s fresh_target=yes\\n' "$MBX_HITS"
+printf 'MBX_WARM_CACHE_HIT PASS hits=%s fresh_target=yes\\n' "$MBX_LAST_HITS"
 printf 'IMAGE_VALIDATION PASS native ARM64; no network/auth/model/context7 invocation\\n'
 '''.encode()
 
 
 def require_builder_arm64(output: str) -> None:
-    match = re.search(r"(?m)^Platforms:\s*(.+)$", output)
-    if match is None or BUILD_PLATFORM not in {item.strip() for item in match.group(1).split(",")}:
+    platform_line = next(
+        (line.strip().partition(":")[2].strip() for line in output.splitlines() if line.strip().startswith("Platforms:")),
+        None,
+    )
+    if platform_line is None or BUILD_PLATFORM not in {
+        item.strip().removesuffix("*") for item in platform_line.split(",")
+    }:
         raise ValidationError("task-owned Buildx builder does not report native linux/arm64")
 
 
@@ -801,6 +916,8 @@ def run_bounded(
         except BaseException:
             terminate_process_group(process)
             raise
+        if process_group_exists(process.pid):
+            terminate_process_group(process)
     elapsed = round(time.monotonic() - start, 3)
     print(json.dumps({"label": label, "argv": list(argv), "status": status, "elapsed_seconds": elapsed}))
     if status != 0:
@@ -849,15 +966,43 @@ def docker_output(
     return path.read_text(encoding="utf-8", errors="replace").strip()
 
 
-def remove_owned_container(
+def docker_inspect_json(
     docker: Path,
-    container_name: str,
-    captured_container_id: str | None,
+    target: str,
     env: dict[str, str],
     run_root: Path,
-) -> str:
-    listed = docker_output(
-        "find-owned-container",
+    log_name: str,
+    *,
+    image: bool = False,
+) -> dict[str, object]:
+    command = [str(docker)]
+    if image:
+        command.append("image")
+    command.extend(["inspect", "--format", "{{json .}}", target])
+    output = docker_output(
+        f"inspect-owned-{ 'image' if image else 'container' }",
+        command,
+        env,
+        run_root / log_name,
+    )
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError as error:
+        raise ValidationError(f"Docker inspect returned invalid JSON for {target}") from error
+    if not isinstance(parsed, dict):
+        raise ValidationError(f"Docker inspect returned an unexpected object for {target}")
+    return parsed
+
+
+def container_ids_named(
+    docker: Path,
+    container_name: str,
+    env: dict[str, str],
+    run_root: Path,
+    log_name: str,
+) -> list[str]:
+    output = docker_output(
+        "find-container-by-exact-name",
         [
             str(docker),
             "ps",
@@ -868,15 +1013,127 @@ def remove_owned_container(
             f"name=^/{container_name}$",
         ],
         env,
-        run_root / "cleanup-container-list.log",
+        run_root / log_name,
     )
-    if not listed:
-        return "already-absent"
-    matches = listed.splitlines()
+    return output.splitlines() if output else []
+
+
+def recover_owned_container(
+    docker: Path,
+    container_name: str,
+    owner_token: str,
+    env: dict[str, str],
+    run_root: Path,
+    log_prefix: str,
+    *,
+    ownership_env: bool = False,
+) -> dict[str, object] | None:
+    owner_token = validate_owner_token(owner_token)
+    matches = container_ids_named(
+        docker,
+        container_name,
+        env,
+        run_root,
+        f"{log_prefix}-list.log",
+    )
+    if not matches:
+        return None
     if len(matches) != 1:
-        raise ValidationError(f"Docker container filter returned unexpected IDs: {matches!r}")
-    container_id = validate_container_id(matches[0])
-    if captured_container_id is not None and container_id != captured_container_id:
+        raise ValidationError(f"exact Docker container name resolved to multiple IDs: {matches!r}")
+    listed_id = validate_container_id(matches[0])
+    inspected = docker_inspect_json(
+        docker,
+        listed_id,
+        env,
+        run_root,
+        f"{log_prefix}-inspect.log",
+    )
+    inspected_id = validate_container_id(str(inspected.get("Id", "")))
+    if inspected_id != listed_id:
+        raise ValidationError("Docker container ID changed between listing and inspection")
+    if inspected.get("Name") != f"/{container_name}":
+        raise ValidationError("Docker container name changed between listing and inspection")
+    config = inspected.get("Config")
+    if not isinstance(config, dict):
+        raise ValidationError("Docker container inspect omitted its configuration")
+    if ownership_env:
+        env_entries = config.get("Env")
+        if not isinstance(env_entries, list) or f"{OWNER_ENV_KEY}={owner_token}" not in env_entries:
+            raise ValidationError("BuildKit container ownership token does not match this task")
+    else:
+        labels = config.get("Labels")
+        if not isinstance(labels, dict) or labels.get(OWNER_LABEL_KEY) != owner_token:
+            raise ValidationError("Docker container ownership label does not match this task")
+    mounts = inspected.get("Mounts", [])
+    if not isinstance(mounts, list):
+        raise ValidationError("Docker container inspect returned invalid mounts")
+    inspected["_validated_id"] = inspected_id
+    inspected["_mounts"] = mounts
+    return inspected
+
+
+def validate_owned_builder_name(builder: str, owner_token: str) -> None:
+    owner_token = validate_owner_token(owner_token)
+    if not re.fullmatch(
+        rf"vlnr-[1-9][0-9]{{0,19}}-[1-9][0-9]{{0,5}}-arm64-{owner_token[:24]}",
+        builder,
+    ):
+        raise ValidationError("Buildx builder name does not contain this task's owner nonce")
+
+
+def verify_buildx_builder_owner(
+    docker: Path,
+    builder: str,
+    owner_token: str,
+    env: dict[str, str],
+    run_root: Path,
+    log_name: str,
+) -> None:
+    validate_owned_builder_name(builder, owner_token)
+    output = docker_output(
+        "inspect-owned-buildx-builder-record",
+        [str(docker), "buildx", "inspect", builder],
+        env,
+        run_root / log_name,
+    )
+    name_match = re.search(r"(?m)^Name:\s+(\S+)\s*$", output)
+    driver_match = re.search(r"(?m)^Driver:\s+(\S+)\s*$", output)
+    option_matches = re.findall(r"(?m)^\s*Driver Options:\s*(.*?)\s*$", output)
+    expected_option = f"env.{OWNER_ENV_KEY}={owner_token}"
+    try:
+        options = shlex.split(option_matches[0]) if len(option_matches) == 1 else []
+    except ValueError as error:
+        raise ValidationError("Buildx builder driver options are malformed") from error
+    if (
+        name_match is None
+        or name_match.group(1) != builder
+        or driver_match is None
+        or driver_match.group(1) != "docker-container"
+        or expected_option not in options
+    ):
+        raise ValidationError("Buildx builder metadata does not prove this task's ownership")
+
+
+def remove_owned_container(
+    docker: Path,
+    resources: OwnedDockerResources,
+    env: dict[str, str],
+    run_root: Path,
+) -> str:
+    if not resources.runtime_creation_attempted:
+        return "not-created-by-this-task"
+    recovered = recover_owned_container(
+        docker,
+        resources.container_name,
+        resources.owner_token,
+        env,
+        run_root,
+        "cleanup-runtime-container",
+    )
+    if recovered is None:
+        return "already-absent"
+    container_id = str(recovered["_validated_id"])
+    if resources.runtime_container_id is not None and container_id != resources.runtime_container_id:
         raise ValidationError("named runtime container no longer has its captured immutable ID")
     run_bounded(
         "remove-owned-container",
@@ -889,19 +1146,111 @@ def remove_owned_container(
 
 
 def remove_owned_builder(
-    docker: Path, builder: str, env: dict[str, str], run_root: Path
+    docker: Path,
+    resources: OwnedDockerResources,
+    env: dict[str, str],
+    run_root: Path,
 ) -> str:
-    names = list_builders(docker, env, run_root, "cleanup-builders.log")
-    if builder not in names:
-        return "already-absent"
-    run_bounded(
-        "remove-owned-buildx-builder",
-        make_builder_remove_argv(docker, builder),
+    if not resources.builder_creation_attempted:
+        return "not-created-by-this-task"
+    builder = resources.builder
+    container_name = f"buildx_buildkit_{builder}0"
+    recovered = recover_owned_container(
+        docker,
+        container_name,
+        resources.owner_token,
         env,
-        run_root / "cleanup-builder.log",
-        COMMAND_TIMEOUT_SECONDS,
+        run_root,
+        "cleanup-builder-container",
+        ownership_env=True,
     )
-    return "removed-cache-and-daemon"
+    container_id = str(recovered["_validated_id"]) if recovered is not None else None
+    if (
+        resources.builder_container_id is not None
+        and container_id is not None
+        and container_id != resources.builder_container_id
+    ):
+        raise ValidationError("task-owned builder name no longer points at its captured container ID")
+    names = list_builders(docker, env, run_root, "cleanup-builders.log")
+    expected_volume = f"{container_name}_state"
+    volume_ownership_proven = False
+    if builder in names:
+        verify_buildx_builder_owner(
+            docker,
+            builder,
+            resources.owner_token,
+            env,
+            run_root,
+            "cleanup-builder-record-inspect.log",
+        )
+        volume_ownership_proven = True
+        run_bounded(
+            "remove-owned-buildx-builder",
+            make_builder_remove_argv(docker, builder),
+            env,
+            run_root / "cleanup-builder.log",
+            COMMAND_TIMEOUT_SECONDS,
+        )
+        status = "removed-cache-and-daemon"
+    elif recovered is not None:
+        mounts = recovered["_mounts"]
+        run_bounded(
+            "remove-partial-owned-buildkit-container",
+            [str(docker), "rm", "--force", container_id],
+            env,
+            run_root / "cleanup-partial-builder-container.log",
+            COMMAND_TIMEOUT_SECONDS,
+        )
+        mounted_owned_volumes = {
+            mount.get("Name")
+            for mount in mounts
+            if isinstance(mount, dict)
+            and mount.get("Type") == "volume"
+            and mount.get("Name") == expected_volume
+        }
+        volume_ownership_proven = mounted_owned_volumes == {expected_volume}
+        if expected_volume in list_volumes(
+            docker, env, run_root, "cleanup-builder-volumes.log"
+        ) and volume_ownership_proven:
+            run_bounded(
+                "remove-partial-owned-buildkit-cache",
+                [str(docker), "volume", "rm", expected_volume],
+                env,
+                run_root / "cleanup-partial-builder-volume.log",
+                COMMAND_TIMEOUT_SECONDS,
+            )
+        status = "removed-partial-cache-and-daemon"
+    elif expected_volume in list_volumes(
+        docker, env, run_root, "cleanup-orphan-builder-volumes.log"
+    ):
+        # The 96-bit nonce in the preflighted private-config builder name is the
+        # recovery token if creation stopped after volume creation.
+        validate_owned_builder_name(builder, resources.owner_token)
+        volume_ownership_proven = True
+        run_bounded(
+            "remove-orphan-owned-buildkit-cache",
+            [str(docker), "volume", "rm", expected_volume],
+            env,
+            run_root / "cleanup-orphan-builder-volume.log",
+            COMMAND_TIMEOUT_SECONDS,
+        )
+        status = "removed-orphan-cache-volume"
+    else:
+        return "already-absent"
+    # `buildx rm` owns the normal cleanup path; remove an exact task-named
+    # volume only if the plugin left it behind.
+    remaining_volumes = list_volumes(docker, env, run_root, "cleanup-builder-volumes-final.log")
+    if expected_volume in remaining_volumes and not volume_ownership_proven:
+        raise ValidationError("BuildKit cache volume remains but ownership could not be proven")
+    if expected_volume in remaining_volumes:
+        run_bounded(
+            "remove-owned-buildkit-cache-volume",
+            [str(docker), "volume", "rm", expected_volume],
+            env,
+            run_root / "cleanup-builder-volume-final.log",
+            COMMAND_TIMEOUT_SECONDS,
+        )
+    return status
 
 
 def list_builders(
@@ -914,6 +1263,18 @@ def list_builders(
         run_root / log_name,
     )
     return {line.removesuffix("*") for line in listing.splitlines()}
+
+
+def list_volumes(
+    docker: Path, env: dict[str, str], run_root: Path, log_name: str
+) -> set[str]:
+    listing = docker_output(
+        "list-docker-volumes",
+        [str(docker), "volume", "ls", "--format", "{{.Name}}"],
+        env,
+        run_root / log_name,
+    )
+    return set(listing.splitlines()) if listing else set()
 
 
 def find_owned_image(
@@ -945,66 +1306,113 @@ def find_owned_image(
     return validate_image_id(ids[0])
 
 
-def docker_inspect_image_id(docker: Path, tag: str, env: dict[str, str], run_root: Path) -> str:
-    path = run_root / "image-inspect.log"
-    run_bounded(
-        "inspect-built-image",
-        [str(docker), "image", "inspect", "--format", "{{.Id}}", tag],
+def inspect_owned_image(
+    docker: Path,
+    target: str,
+    owner_token: str,
+    env: dict[str, str],
+    run_root: Path,
+    log_name: str,
+) -> tuple[str, dict[str, object]]:
+    owner_token = validate_owner_token(owner_token)
+    inspected = docker_inspect_json(
+        docker,
+        target,
         env,
-        path,
-        COMMAND_TIMEOUT_SECONDS,
+        run_root,
+        log_name,
+        image=True,
     )
-    image_id = validate_image_id_from_log(path)
+    image_id = validate_image_id(str(inspected.get("Id", "")))
+    config = inspected.get("Config")
+    labels = config.get("Labels") if isinstance(config, dict) else None
+    if not isinstance(labels, dict) or labels.get(OWNER_LABEL_KEY) != owner_token:
+        raise ValidationError("Docker image ownership label does not match this task")
+    return image_id, inspected
+
+
+def docker_inspect_image_id(
+    docker: Path,
+    tag: str,
+    owner_token: str,
+    env: dict[str, str],
+    run_root: Path,
+) -> str:
+    image_id, _inspected = inspect_owned_image(
+        docker, tag, owner_token, env, run_root, "image-inspect.json.log"
+    )
     print(f"IMAGE_ID {image_id}")
     return image_id
+
+
+def remove_owned_image(
+    docker: Path,
+    resources: OwnedDockerResources,
+    env: dict[str, str],
+    run_root: Path,
+) -> str:
+    if not resources.image_build_attempted:
+        return "not-created-by-this-task"
+    current_image_id = find_owned_image(
+        docker, resources.image_tag, env, run_root, "cleanup-images.log"
+    )
+    if current_image_id is None:
+        return "already-absent"
+    owned_image_id, _inspected = inspect_owned_image(
+        docker,
+        resources.image_tag,
+        resources.owner_token,
+        env,
+        run_root,
+        "cleanup-image-inspect.log",
+    )
+    if owned_image_id != current_image_id:
+        raise ValidationError("image tag changed between listing and ownership inspection")
+    if resources.image_id is not None and current_image_id != resources.image_id:
+        raise ValidationError("unique image tag no longer resolves to its captured immutable ID")
+    run_bounded(
+        "remove-owned-image-tag",
+        [str(docker), "image", "rm", resources.image_tag],
+        env,
+        run_root / "cleanup-image.log",
+        COMMAND_TIMEOUT_SECONDS,
+    )
+    return "removed-tag"
 
 
 def cleanup_owned(
     docker: Path,
     env: dict[str, str],
     run_root: Path,
-    builder: str,
-    container_create_attempted: bool,
-    builder_attempted: bool,
-    image_build_attempted: bool,
-    image_id: str | None,
-    tag: str,
-    container_name: str,
-    container_id: str | None,
+    resources: OwnedDockerResources,
 ) -> list[str]:
     errors: list[str] = []
-    if container_create_attempted:
+    cleanup_steps = (
+        (
+            "container",
+            lambda: remove_owned_container(docker, resources, env, run_root),
+            resources.container_name,
+            resources.runtime_container_id,
+        ),
+        (
+            "builder",
+            lambda: remove_owned_builder(docker, resources, env, run_root),
+            resources.builder,
+            resources.builder_container_id,
+        ),
+        (
+            "image",
+            lambda: remove_owned_image(docker, resources, env, run_root),
+            resources.image_tag,
+            resources.image_id,
+        ),
+    )
+    for kind, remove, name, captured_id in cleanup_steps:
         try:
-            outcome = remove_owned_container(
-                docker, container_name, container_id, env, run_root
-            )
-            print(f"CLEANUP container={container_name} id={container_id} status={outcome}")
+            outcome = remove()
+            print(f"CLEANUP {kind}={name} id={captured_id or 'recovered'} status={outcome}")
         except (ValidationError, OSError) as error:
-            errors.append(f"container:{error}")
-    if builder_attempted:
-        try:
-            outcome = remove_owned_builder(docker, builder, env, run_root)
-            print(f"CLEANUP builder={builder} status={outcome}")
-        except (ValidationError, OSError) as error:
-            errors.append(f"builder:{error}")
-    candidate_id = image_id
-    if candidate_id is None and image_build_attempted:
-        try:
-            candidate_id = find_owned_image(docker, tag, env, run_root)
-        except (ValidationError, OSError) as error:
-            errors.append(f"image-discovery:{error}")
-    if candidate_id is not None:
-        try:
-            run_bounded(
-                "remove-owned-image",
-                [str(docker), "image", "rm", "--force", validate_image_id(candidate_id)],
-                env,
-                run_root / "cleanup-image.log",
-                COMMAND_TIMEOUT_SECONDS,
-            )
-            print(f"CLEANUP image={candidate_id} status=removed")
-        except (ValidationError, OSError) as error:
-            errors.append(f"image:{error}")
+            errors.append(f"{kind}:{error}")
     return errors
 
 
@@ -1031,8 +1439,9 @@ def execution_environment_is_isolated() -> bool:
 
 
 def execute(repo: Path, source_commit: str, runner_temp: Path, run_id: str, attempt: str) -> None:
-    builder = make_builder_name(run_id, attempt)
-    container_name = make_container_name(run_id, attempt)
+    owner_token = uuid.uuid4().hex
+    builder = make_builder_name(run_id, attempt, owner_token)
+    container_name = make_container_name(run_id, attempt, owner_token)
     if normalize_arch(os.uname().machine) != "arm64":
         raise ValidationError("task must run on a native ARM64 host")
     repo = validate_runner_directory(repo, "workspace")
@@ -1071,12 +1480,8 @@ def execute(repo: Path, source_commit: str, runner_temp: Path, run_id: str, atte
     preflight = collect_docker_preflight(docker, docker_env, run_root)
     print("DOCKER_PREFLIGHT " + json.dumps(preflight, sort_keys=True))
 
-    tag = f"architect-arm64:{commit[:12]}-{uuid.uuid4().hex[:10]}"
-    container_id: str | None = None
-    container_create_attempted = False
-    builder_attempted = False
-    image_id: str | None = None
-    image_build_attempted = False
+    tag = f"architect-arm64:{commit[:12]}-{owner_token}"
+    resources = OwnedDockerResources(owner_token, builder, container_name, tag)
     success = False
     try:
         existing_containers = docker_output(
@@ -1100,49 +1505,107 @@ def execute(repo: Path, source_commit: str, runner_temp: Path, run_id: str, atte
         )
         if builder in existing_builders:
             raise ValidationError(f"task-owned Buildx builder already exists: {builder}")
+        builder_container_name = f"buildx_buildkit_{builder}0"
+        if container_ids_named(
+            docker,
+            builder_container_name,
+            docker_env,
+            run_root,
+            "builder-container-name-preflight.log",
+        ):
+            raise ValidationError(
+                f"task-owned BuildKit container already exists: {builder_container_name}"
+            )
+        builder_volume = f"{builder_container_name}_state"
+        if builder_volume in list_volumes(
+            docker, docker_env, run_root, "builder-volume-name-preflight.log"
+        ):
+            raise ValidationError(f"task-owned BuildKit cache volume already exists: {builder_volume}")
         existing_image_id = find_owned_image(
             docker, tag, docker_env, run_root, "image-name-preflight.log"
         )
         if existing_image_id is not None:
             raise ValidationError(f"unique task image tag already exists: {tag}")
-        builder_attempted = True
-        run_bounded(
-            "create-owned-buildx-builder",
-            make_builder_create_argv(docker, builder),
-            docker_env,
-            log_dir / "builder-create.log",
-            120,
+        attempt_owned_creation(
+            resources,
+            "builder",
+            lambda: run_bounded(
+                "create-owned-buildx-builder",
+                make_builder_create_argv(docker, builder, owner_token),
+                docker_env,
+                log_dir / "builder-create.log",
+                120,
+            ),
         )
-        inspect_builder(docker, builder, docker_env, run_root)
-        build_log = log_dir / "docker-build.log"
-        image_build_attempted = True
-        run_bounded(
-            "build-native-arm64-image",
-            make_build_argv(docker, builder, tag, context),
+        builder_container = recover_owned_container(
+            docker,
+            builder_container_name,
+            owner_token,
             docker_env,
-            build_log,
-            BUILD_TIMEOUT_SECONDS,
+            run_root,
+            "capture-builder-container",
+            ownership_env=True,
+        )
+        if builder_container is None:
+            raise ValidationError("successful Buildx creation did not produce its owned container")
+        resources.builder_container_id = str(builder_container["_validated_id"])
+        inspect_builder(
+            docker,
+            builder,
+            resources.builder_container_id,
+            docker_env,
+            run_root,
+        )
+        build_log = log_dir / "docker-build.log"
+        attempt_owned_creation(
+            resources,
+            "image",
+            lambda: run_bounded(
+                "build-native-arm64-image",
+                make_build_argv(docker, builder, tag, context, owner_token),
+                docker_env,
+                build_log,
+                BUILD_TIMEOUT_SECONDS,
+            ),
+        )
+        resources.image_id = docker_inspect_image_id(
+            docker, tag, owner_token, docker_env, run_root
         )
         verify_arm_fallback_build_log(build_log)
-        image_id = docker_inspect_image_id(docker, tag, docker_env, run_root)
         probe = make_probe_script()
         probe_path = run_root / "runtime-probe.sh"
         probe_path.write_bytes(probe)
         probe_path.chmod(0o600)
         create_log = log_dir / "runtime-container-create.log"
-        container_create_attempted = True
-        run_bounded(
-            "create-networkless-native-arm64-runtime",
-            make_probe_create_argv(docker, image_id, container_name),
-            docker_env,
-            create_log,
-            COMMAND_TIMEOUT_SECONDS,
+        attempt_owned_creation(
+            resources,
+            "runtime",
+            lambda: run_bounded(
+                "create-networkless-native-arm64-runtime",
+                make_probe_create_argv(docker, resources.image_id, container_name, owner_token),
+                docker_env,
+                create_log,
+                COMMAND_TIMEOUT_SECONDS,
+            ),
         )
-        container_id = validate_container_id(create_log.read_text(encoding="ascii").strip())
-        print(f"RUNTIME_CONTAINER name={container_name} id={container_id}")
+        recovered_runtime = recover_owned_container(
+            docker,
+            container_name,
+            owner_token,
+            docker_env,
+            run_root,
+            "capture-runtime-container",
+        )
+        if recovered_runtime is None:
+            raise ValidationError("successful runtime create did not produce its owned container")
+        resources.runtime_container_id = str(recovered_runtime["_validated_id"])
+        create_log_id = validate_container_id(create_log.read_text(encoding="ascii").strip())
+        if create_log_id != resources.runtime_container_id:
+            raise ValidationError("runtime create output disagrees with the owned container ID")
+        print(f"RUNTIME_CONTAINER name={container_name} id={resources.runtime_container_id}")
         run_bounded(
             "networkless-native-arm64-runtime",
-            make_probe_start_argv(docker, container_id),
+            make_probe_start_argv(docker, resources.runtime_container_id),
             docker_env,
             log_dir / "runtime-probe.log",
             PROBE_TIMEOUT_SECONDS,
@@ -1161,14 +1624,7 @@ def execute(repo: Path, source_commit: str, runner_temp: Path, run_id: str, atte
                 docker,
                 docker_env,
                 run_root,
-                builder,
-                container_create_attempted,
-                builder_attempted,
-                image_build_attempted,
-                image_id,
-                tag,
-                container_name,
-                container_id,
+                resources,
             )
         finally:
             for signum, previous_handler in previous_signals.items():
@@ -1176,7 +1632,9 @@ def execute(repo: Path, source_commit: str, runner_temp: Path, run_id: str, atte
         report_cleanup_errors(cleanup_errors, original_failure_active)
     if success:
         print("IMAGE_VALIDATION PASS native-arm64 build, source fallbacks, runtime and cleanup")
-        print(f"IMAGE_EVIDENCE source={commit} tree={tree} image={image_id} run_dir={run_root}")
+        print(
+            f"IMAGE_EVIDENCE source={commit} tree={tree} image={resources.image_id} run_dir={run_root}"
+        )
 
 
 def collect_docker_preflight(
@@ -1219,7 +1677,13 @@ def collect_docker_preflight(
     }
 
 
-def inspect_builder(docker: Path, builder: str, env: dict[str, str], run_root: Path) -> None:
+def inspect_builder(
+    docker: Path,
+    builder: str,
+    expected_container_id: str,
+    env: dict[str, str],
+    run_root: Path,
+) -> None:
     inspect_log = run_root / "builder-inspect.log"
     run_bounded(
         "inspect-owned-buildx-builder",
@@ -1231,6 +1695,19 @@ def inspect_builder(docker: Path, builder: str, env: dict[str, str], run_root: P
     output = inspect_log.read_text(encoding="utf-8", errors="replace")
     require_builder_arm64(output)
     container_name = f"buildx_buildkit_{builder}0"
+    container_id_log = run_root / "builder-container-id.log"
+    run_bounded(
+        "inspect-buildkit-container-id",
+        [str(docker), "inspect", "--format", "{{.Id}}", container_name],
+        env,
+        container_id_log,
+        COMMAND_TIMEOUT_SECONDS,
+    )
+    container_id = validate_container_id(
+        container_id_log.read_text(encoding="utf-8").strip()
+    )
+    if container_id != validate_container_id(expected_container_id):
+        raise ValidationError("BuildKit container identity changed after ownership capture")
     container_log = run_root / "builder-container-image.log"
     run_bounded(
         "inspect-buildkit-container-image",
@@ -1252,7 +1729,9 @@ def inspect_builder(docker: Path, builder: str, env: dict[str, str], run_root: P
     )
     if normalize_arch(image_arch_log.read_text(encoding="utf-8").strip()) != "arm64":
         raise ValidationError("task-owned BuildKit container image is not ARM64")
-    print(f"NATIVE_BUILDKIT builder={builder} image={image_id} arch=arm64")
+    print(
+        f"NATIVE_BUILDKIT builder={builder} container={expected_container_id} image={image_id} arch=arm64"
+    )
 
 
 def main() -> int:
