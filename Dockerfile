@@ -69,7 +69,7 @@ RUN mkdir -p \
 
 # Per-tool RUNs (caching).
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
+    MISE_CARGO_BINSTALL_ONLY=1 mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
     mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
 
 RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
