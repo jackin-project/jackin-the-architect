@@ -15,10 +15,7 @@ ARG CARGO_FUZZ_VERSION=0.13.2
 ARG CARGO_MUTANTS_VERSION=27.1.0
 ARG TARGETARCH
 ARG OPENTOFU_VERSION=1.12.6
-# CAVEMAN_VERSION must be tagged release.
-ARG CAVEMAN_VERSION=2.7.0
-ARG CTX7_VERSION=0.5.11
-ARG SKILLS_VERSION=1.5.22
+ARG NODE_TOOLS_VERSION=24.21.0
 # HEADROOM_VERSION.
 ARG HEADROOM_VERSION=0.37.0
 # UV_VERSION.
@@ -42,7 +39,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 USER agent
 
-ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
+ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/architect-node-tools/node_modules/.bin:/home/agent/.local/share/mise/shims:${PATH}"
 ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
 
 COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
@@ -159,34 +156,94 @@ RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     mise install "opentofu@${OPENTOFU_VERSION}" && \
     mise use -g --pin "opentofu@${OPENTOFU_VERSION}"
 
-RUN mise exec -- npm install -g "ctx7@${CTX7_VERSION}" "skills@${SKILLS_VERSION}"
+# The package lock pins both Node CLIs and every npm tarball they install.
+COPY --chown=agent:agent maintained-image-build/skills-cli/package.json maintained-image-build/skills-cli/package-lock.json /home/agent/.local/share/architect-node-tools/
 
-# Caveman (opencode clone, codex/amp skills).
-RUN . ~/.profile && \
-    git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
-    node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
-    test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
-    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
-    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/caveman/SKILL.md" && \
-    rm -rf /tmp/caveman
-
-# jackin-dev skills.
-RUN . ~/.profile && \
-    skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
-    skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/jackin-propose/SKILL.md" && \
-    test -f "${HOME}/.agents/skills/jackin-merge-pr/SKILL.md"
-
-# improve skill (shadcn/improve).
-RUN . ~/.profile && \
-    skills add "shadcn/improve" -a claude-code --yes --global && \
-    skills add "shadcn/improve" -a codex --yes --global && \
-    skills add "shadcn/improve" -a amp --yes --global && \
-    skills add "shadcn/improve" -a opencode --yes --global && \
-    skills add "shadcn/improve" -a kimi-code-cli --yes --global && \
-    test -f "${HOME}/.claude/skills/improve/SKILL.md" && \
-    test -f "${HOME}/.agents/skills/improve/SKILL.md"
+# Pinned sources avoid moving-branch lookups, Git credential fallbacks, and adapter drift.
+RUN . ~/.profile && set -eu; \
+    node_bin="${HOME}/.local/share/mise/installs/node/${NODE_TOOLS_VERSION}/bin"; \
+    npm_home=/tmp/architect-npm-home; \
+    npm_config_dir=/tmp/architect-npm-config; \
+    source_root=/tmp/architect-sources; \
+    git_home=/tmp/architect-git-home; \
+    rm -rf "${npm_home}" "${npm_config_dir}" "${source_root}" /tmp/architect-npm-cache "${git_home}"; \
+    mkdir -p "${npm_home}" "${npm_config_dir}" "${source_root}/git-template"; \
+    : > "${npm_config_dir}/user.npmrc"; \
+    : > "${npm_config_dir}/global.npmrc"; \
+    export PATH="${node_bin}:${PATH}"; \
+    test "$("${node_bin}/node" --version)" = "v${NODE_TOOLS_VERSION}"; \
+    test "$("${node_bin}/npm" --version)" = "11.19.0"; \
+    cd /tmp; \
+    env -i HOME="${npm_home}" PATH="${node_bin}:/usr/bin:/bin" \
+        NPM_CONFIG_USERCONFIG="${npm_config_dir}/user.npmrc" \
+        NPM_CONFIG_GLOBALCONFIG="${npm_config_dir}/global.npmrc" \
+        NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ \
+        NPM_CONFIG_CACHE=/tmp/architect-npm-cache \
+        NPM_CONFIG_IGNORE_SCRIPTS=true NPM_CONFIG_AUDIT=false NPM_CONFIG_FUND=false \
+        "${node_bin}/npm" ci --prefix "${HOME}/.local/share/architect-node-tools" \
+            --ignore-scripts --no-audit --no-fund; \
+    mkdir -p "${git_home}"; \
+    git_clean() { \
+        env -i HOME="${git_home}" PATH=/usr/bin:/bin \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+            GIT_TERMINAL_PROMPT=0 GIT_ALLOW_PROTOCOL=https GIT_LFS_SKIP_SMUDGE=1 \
+            /usr/bin/git "$@"; \
+    }; \
+    acquire_source() { \
+        source_name="$1"; \
+        repository="$2"; \
+        commit_sha="$3"; \
+        tree_sha="$4"; \
+        archive_sha="$5"; \
+        source_dir="${source_root}/${source_name}"; \
+        git_dir="${source_root}/${source_name}.git"; \
+        archive_path="${source_root}/${source_name}.tar"; \
+        mkdir -p "${source_dir}"; \
+        git_clean init --template="${source_root}/git-template" --quiet "${git_dir}"; \
+        git_clean -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "${git_dir}" \
+            fetch --quiet --depth=1 "https://github.com/${repository}.git" "${commit_sha}"; \
+        test "$(git_clean -C "${git_dir}" rev-parse FETCH_HEAD)" = "${commit_sha}"; \
+        test "$(git_clean -C "${git_dir}" rev-parse 'FETCH_HEAD^{tree}')" = "${tree_sha}"; \
+        git_clean -c core.hooksPath=/dev/null -c core.fsmonitor=false -C "${git_dir}" \
+            archive --format=tar --output="${archive_path}" FETCH_HEAD; \
+        printf '%s  %s\n' "${archive_sha}" "${archive_path}" | sha256sum --check --strict -; \
+        tar --extract --file "${archive_path}" --directory "${source_dir}" --no-same-owner; \
+        rm -rf "${git_dir}" "${archive_path}"; \
+    }; \
+    acquire_source caveman JuliusBrussee/caveman \
+        8b0c1d3699b8d83e87fe4605b378da20c41555e0 \
+        4e8aa5e191457ba9ebd34b4a7eee6a7bd246ccff \
+        954909b361634fad64bd299642ca3d5d5f6320d8b9fb6760efc51a4e83eea718; \
+    acquire_source jackin-dev jackin-project/jackin-dev \
+        a01b342162bc56cdf1e8bbaab793e73d31c1d621 \
+        df2808b2fd551d0466036352579571b20efb0933 \
+        97972af0add734cdeee560dba3c3861d8da8084f04b688aabfbcfe6c900fd0e1; \
+    acquire_source shadcn-improve shadcn/improve \
+        cac56e1ebd3c279aa9153616cfeac7b174ab90f9 \
+        b8195551ac5dae1830e0eaed20079a4ee555a20b \
+        9aa4067c152f18270a220b01dce8d83da9e5a8f30cd264f3a2ad30eedc1d14b1; \
+    skills_cli="${HOME}/.local/share/architect-node-tools/node_modules/.bin/skills"; \
+    test -x "${skills_cli}" && test -x "${HOME}/.local/share/architect-node-tools/node_modules/.bin/ctx7"; \
+    caveman_source="${source_root}/caveman"; \
+    "${node_bin}/node" "${caveman_source}/bin/install.js" --only opencode --no-mcp-shrink; \
+    test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js"; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${caveman_source}" -a codex --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${caveman_source}" -a amp --yes --global; \
+    test -f "${HOME}/.agents/skills/caveman/SKILL.md"; \
+    jackin_source="${source_root}/jackin-dev"; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${jackin_source}" -s '*' -a codex --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${jackin_source}" -s '*' -a amp --yes --global; \
+    test -f "${HOME}/.agents/skills/jackin-propose/SKILL.md"; \
+    test -f "${HOME}/.agents/skills/jackin-merge-pr/SKILL.md"; \
+    shadcn_source="${source_root}/shadcn-improve"; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a claude-code --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a codex --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a amp --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a opencode --yes --global; \
+    DO_NOT_TRACK=1 "${skills_cli}" add "${shadcn_source}" -a kimi-code-cli --yes --global; \
+    test -f "${HOME}/.claude/skills/improve/SKILL.md"; \
+    test -f "${HOME}/.agents/skills/improve/SKILL.md"; \
+    rm -rf "${source_root}" "${npm_home}" "${npm_config_dir}" /tmp/architect-npm-cache /tmp/architect-git-home
 
 # ── Token-optimisation stack ──────────────────────────────────────────────────
 
