@@ -278,8 +278,14 @@ RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
             --netrc-file /dev/null "${asset_url}" -o "${archive}"; \
         printf '%s  %s\n' "${asset_sha256}" "${archive}" | sha256sum --check --strict -; \
         case "${asset_url}" in \
-            *.tar.xz) tar --extract --xz --file "${archive}" --to-stdout --no-wildcards -- "${executable_member}" > "${binary}" ;; \
-            *) tar --extract --gzip --file "${archive}" --to-stdout --no-wildcards -- "${executable_member}" > "${binary}" ;; \
+            *.tar.xz) \
+                tar --extract --xz \
+                    --file "${archive}" --to-stdout \
+                    --no-wildcards -- "${executable_member}" > "${binary}" ;; \
+            *) \
+                tar --extract --gzip \
+                    --file "${archive}" --to-stdout \
+                    --no-wildcards -- "${executable_member}" > "${binary}" ;; \
         esac; \
         test -s "${binary}"; \
         install_root="${HOME}/.local/share/mise/installs/${package}/${version}/bin"; \
