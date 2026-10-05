@@ -8,10 +8,21 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG MISE_VERSION=2026.9.18
 ARG MBX_VERSION=1.22.0
 ARG CARGO_BINSTALL_VERSION=1.23.0
+ARG CARGO_AUDIT_VERSION=0.22.2
+ARG CARGO_DENY_VERSION=0.20.2
+ARG CARGO_DYLINT_VERSION=6.0.4
 ARG CARGO_WATCH_VERSION=8.5.3
+ARG CARGO_HACK_VERSION=0.6.45
+ARG CARGO_HAKARI_VERSION=0.9.38
+ARG CARGO_LLVM_COV_VERSION=0.8.7
 ARG LYCHEE_VERSION=0.24.2
 ARG BOLTFFI_VERSION=0.30.1
 ARG CARGO_FUZZ_VERSION=0.13.2
+ARG CARGO_SHEAR_VERSION=1.13.4
+ARG CARGO_ZIGBUILD_VERSION=0.23.0
+ARG CODEBOOK_LSP_VERSION=0.3.42
+ARG SCCACHE_VERSION=0.17.0
+ARG DYLINT_LINK_VERSION=6.0.4
 ARG CARGO_MUTANTS_VERSION=27.1.0
 ARG TARGETARCH
 ARG OPENTOFU_VERSION=1.12.6
@@ -86,33 +97,64 @@ RUN --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
     mise use -g --pin -C /tmp/jackin-mise rust && \
     mise use -g --pin -C /tmp/jackin-mise --tool-option mr_boxington=true rust "mr-boxington@${MBX_VERSION}"
 
-# ARM64 lacks compatible binary assets for these two Cargo-backed Mise tools.
-# MBX routes Cargo registry installs but does not cache their install sessions;
-# BuildKit retains Cargo's target artifacts instead.
+# Cargo-binstall queries GitHub's API while resolving release assets. Install
+# verified sccache archives directly, then use pinned MBX for the remaining
+# Cargo tools so private builds do not depend on unauthenticated API limits.
 RUN --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
     --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
     --mount=type=cache,target=/home/agent/.cache/cargo-target-${TARGETARCH},uid=1000 \
     set -eu; \
     case "${TARGETARCH}" in \
-        amd64) ;; \
+        amd64) \
+            sccache_target=x86_64-unknown-linux-musl; \
+            sccache_sha256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006 \
+            ;; \
         arm64) \
-            MISE_EXEC_AUTO_INSTALL=0 \
-            MISE_CARGO_BINSTALL_ONLY=1 \
-            CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
-                mise exec -- mbx install --locked \
-                    --root "${HOME}/.local/share/mise/installs/cargo-fuzz/${CARGO_FUZZ_VERSION}" \
-                    "cargo-fuzz@${CARGO_FUZZ_VERSION}"; \
-            MISE_EXEC_AUTO_INSTALL=0 \
-            MISE_CARGO_BINSTALL_ONLY=1 \
-            CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
-                mise exec -- mbx install --locked \
-                    --root "${HOME}/.local/share/mise/installs/cargo-mutants/${CARGO_MUTANTS_VERSION}" \
-                    "cargo-mutants@${CARGO_MUTANTS_VERSION}"; \
-            test -x "${HOME}/.local/share/mise/installs/cargo-fuzz/${CARGO_FUZZ_VERSION}/bin/cargo-fuzz"; \
-            test -x "${HOME}/.local/share/mise/installs/cargo-mutants/${CARGO_MUTANTS_VERSION}/bin/cargo-mutants" \
+            sccache_target=aarch64-unknown-linux-musl; \
+            sccache_sha256=821a86343191aa1cbab74bd42f9e93c9a63bf85e4742945f40d3ae84193c1c77 \
             ;; \
         *) echo "unsupported TARGETARCH for Rust tool installation: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac
+    esac; \
+    sccache_archive="/tmp/sccache-v${SCCACHE_VERSION}-${sccache_target}.tar.gz"; \
+    sccache_url="https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}"; \
+    sccache_asset="sccache-v${SCCACHE_VERSION}-${sccache_target}.tar.gz"; \
+    curl -fsSL \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 \
+        "${sccache_url}/${sccache_asset}" \
+        -o "${sccache_archive}"; \
+    printf '%s  %s\n' "${sccache_sha256}" "${sccache_archive}" | sha256sum --check --strict -; \
+    sccache_unpack="/tmp/sccache-${TARGETARCH}"; \
+    mkdir -p "${sccache_unpack}"; \
+    tar --extract --gzip --file "${sccache_archive}" --directory "${sccache_unpack}"; \
+    sccache_root="${HOME}/.local/share/mise/installs/sccache/${SCCACHE_VERSION}/bin"; \
+    mkdir -p "${sccache_root}"; \
+    install -m 0755 \
+        "${sccache_unpack}/sccache-v${SCCACHE_VERSION}-${sccache_target}/sccache" \
+        "${sccache_root}/sccache"; \
+    test -x "${sccache_root}/sccache"; \
+    rm -rf "${sccache_unpack}" "${sccache_archive}"; \
+    install_mbx_cargo_tool() { \
+        package="$1"; \
+        version="$2"; \
+        install_root="${HOME}/.local/share/mise/installs/${package}/${version}"; \
+        MISE_EXEC_AUTO_INSTALL=0 \
+        MISE_CARGO_BINSTALL_ONLY=1 \
+        CARGO_TARGET_DIR="/home/agent/.cache/cargo-target-${TARGETARCH}" \
+            mise exec -- mbx install --locked --root "${install_root}" "${package}@${version}"; \
+        test -x "${install_root}/bin/${package}"; \
+    }; \
+    install_mbx_cargo_tool cargo-audit "${CARGO_AUDIT_VERSION}"; \
+    install_mbx_cargo_tool cargo-deny "${CARGO_DENY_VERSION}"; \
+    install_mbx_cargo_tool cargo-dylint "${CARGO_DYLINT_VERSION}"; \
+    install_mbx_cargo_tool cargo-fuzz "${CARGO_FUZZ_VERSION}"; \
+    install_mbx_cargo_tool cargo-hack "${CARGO_HACK_VERSION}"; \
+    install_mbx_cargo_tool cargo-hakari "${CARGO_HAKARI_VERSION}"; \
+    install_mbx_cargo_tool cargo-llvm-cov "${CARGO_LLVM_COV_VERSION}"; \
+    install_mbx_cargo_tool cargo-mutants "${CARGO_MUTANTS_VERSION}"; \
+    install_mbx_cargo_tool cargo-shear "${CARGO_SHEAR_VERSION}"; \
+    install_mbx_cargo_tool cargo-zigbuild "${CARGO_ZIGBUILD_VERSION}"; \
+    install_mbx_cargo_tool codebook-lsp "${CODEBOOK_LSP_VERSION}"; \
+    install_mbx_cargo_tool dylint-link "${DYLINT_LINK_VERSION}"
 
 # BoltFFI publishes verified x64 and ARM64 release binaries with custom names.
 RUN set -eu; \
