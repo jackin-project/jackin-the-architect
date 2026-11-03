@@ -18,6 +18,8 @@ filesystem_policy:
     - /tmp
     - /dev/null
     - /dev/shm
+    - /dev/ptmx
+    - /dev/pts
     - /sandbox
 landlock:
   compatibility: hard_requirement

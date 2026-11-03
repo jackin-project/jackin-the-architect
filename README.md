@@ -11,7 +11,7 @@ Jackin builds the image and creates the sandbox. This repository does not publis
 | `jackin.role.toml` | The role manifest (schema 1). It names the `Dockerfile` and the policy. The Docker capability is off. |
 | `Dockerfile` | The final stage starts `FROM construct`. It builds git from a checksum-pinned source archive, installs mise from a checksum-pinned release archive, and installs the toolchain. |
 | `toolchain/mise.toml` | The tool pins of the image. The `Dockerfile` copies it to `/etc/mise/config.toml`. |
-| `policy.yaml` | A native OpenShell policy. Landlock is a hard requirement. The network is deny by default. |
+| `policy.yaml` | A native OpenShell policy. Landlock is a hard requirement. The network is deny by default. Writes are allowed to `/sandbox`, `/tmp`, `/dev/null`, `/dev/shm`, `/dev/ptmx`, and `/dev/pts`. |
 
 ## Toolchain
 
@@ -27,11 +27,11 @@ mise exec -- mbx +1.99.1 xtask ci --fast
 
 ## Resources
 
-The default OpenShell VM driver gives a sandbox 2 vCPUs, 2 GiB of memory, and a 4 GiB writable disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config). A debug build of jackin with its tests needs about 3.5 GiB of that disk. `toolchain/mise.toml` therefore sets `CARGO_INCREMENTAL=0`, which saves about 2 GiB of incremental state, and `CARGO_BUILD_JOBS=1`, because two parallel links ran out of memory. Raise `overlay_disk_mib` in the gateway config if a build needs more room.
+Give the sandbox enough disk and memory for a debug build of jackin with its tests. The default OpenShell VM driver gives 2 vCPUs, 2 GiB of memory, and a 4 GiB disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config), which is too small: the build needs about 3.5 GiB of disk even without incremental state, and two parallel links ran out of memory. Raise those values in the gateway config. The role sets no Cargo variable.
 
-## Known limit
+## Known limits
 
-OpenShell 0.1.6 denies group signals in a sandbox (`kill(-pgid, ...)` returns `EPERM`). The jackin tests of `TokioProcessRunner` in `crates/jackin-session/tests/process_runner/lifecycle.rs` kill process groups, so `xtask ci --fast` stops at the nextest step in a sandbox of this role. The other steps pass.
+OpenShell 0.1.6 denies group signals in a sandbox (`kill(-pgid, ...)` returns `EPERM`), and the sandbox `/dev` has no `/dev/stdin` link. `xtask ci --fast` therefore stops at the nextest step in a sandbox of this role while a jackin test relies on either. The other steps pass.
 
 ## Policy
 

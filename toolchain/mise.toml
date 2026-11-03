@@ -29,9 +29,5 @@ python = "3.15.2"
 "pipx:reuse" = { version = "6.3.0", extras = "charset-normalizer" }
 zizmor = "1.32.0"
 
-[env]
-CARGO_INCREMENTAL = "0"
-CARGO_BUILD_JOBS = "1"
-
 [settings]
 cargo.binstall = true
