@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /sbin
+    - /usr
+    - /lib
+    - /etc
+    - /proc
+    - /dev/urandom
+    - /dev/zero
+    - /var/log
+  read_write:
+    - /tmp
+    - /dev/null
+    - /sandbox
+landlock:
+  compatibility: hard_requirement
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+network_policies:
+  crates_io:
+    name: crates_io
+    endpoints:
+      - { host: index.crates.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: static.crates.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: crates.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - { path: "/sandbox/.local/share/mise/installs/**" }
+      - { path: "/sandbox/.rustup/toolchains/**" }
+      - { path: "/sandbox/.cargo/bin/**" }
+      - { path: /usr/local/bin/mise }
+  github:
+    name: github
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**/info/refs" }
+          - allow: { method: POST, path: "/**/git-upload-pack" }
+          - allow: { method: GET, path: "/*/*/releases/download/**" }
+      - { host: codeload.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: objects.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: release-assets.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: api.github.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - { path: "/sandbox/.local/share/mise/installs/**" }
+      - { path: "/sandbox/.rustup/toolchains/**" }
+      - { path: "/sandbox/.cargo/bin/**" }
+      - { path: /usr/local/bin/mise }
+      - { path: /usr/bin/git }
+      - { path: "/usr/lib/git-core/**" }
+  mise_downloads:
+    name: mise_downloads
+    endpoints:
+      - { host: static.rust-lang.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: sh.rustup.rs, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: nodejs.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: pypi.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: files.pythonhosted.org, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: tuf-repo-cdn.sigstore.dev, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: raw.githubusercontent.com, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: mise-versions.jdx.dev, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - { path: /usr/local/bin/mise }

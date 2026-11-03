@@ -1,75 +1,67 @@
 # The Architect
 
-**The Architect** is the jackin agent role for developing [jackin](https://github.com/donbeave/jackin) itself (role identifier `the-architect`). It provides the Rust development environment needed to build and test the jackin CLI.
+The Architect is the jackin role for developing [jackin](https://github.com/jackin-project/jackin) itself. It is a Codex role. It gives Codex the Rust toolchain and the tools that the jackin gates need, in an OpenShell sandbox with a default-deny network policy.
 
-`jackin` validates this repo's Dockerfile, derives the final image itself, and mounts the cached repo checkout into `/workspace` when you run:
+Jackin builds the image and creates the sandbox. This repository does not publish an image. The role holds no secret.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `jackin.role.toml` | The role manifest (schema 1). It names the `Dockerfile` and the policy. The Docker capability is off. |
+| `Dockerfile` | The final stage starts `FROM construct`. It builds git from a checksum-pinned source archive, installs mise from a checksum-pinned release archive, and installs the toolchain. |
+| `toolchain/mise.toml` | The tool pins of the image. The `Dockerfile` copies it to `/etc/mise/config.toml`. |
+| `policy.yaml` | A native OpenShell policy. Landlock is a hard requirement. The network is deny by default. |
+
+## Toolchain
+
+`toolchain/mise.toml` holds the same pins as `mise.toml` in jackin: Rust 1.99.1 with the `mr_boxington = true` option, mr-boxington 1.29.1, cargo-nextest 0.9.151, and the other tools of the jackin gates. mise installs them at build time into `/sandbox`, so a sandbox runs the gate without a download. When jackin changes a pin, change the same pin here.
+
+The image also replaces `/usr/bin/git` with git 2.56.0. The jackin tests run the first `git` in `/usr/bin`, and jackin refuses a host git older than 2.45.4. The construct image has git 2.43.0.
+
+Run the jackin gate in a sandbox of this role:
 
 ```sh
-jackin load the-architect
-# or, with the codex CLI instead of claude:
-jackin load the-architect --agent codex
+mise exec -- mbx +1.99.1 xtask ci --fast
 ```
 
-In a Codex session, caveman is delivered through Codex skills under `~/.agents/skills` rather than the Claude plugin/statusline path; trigger it with text such as `caveman mode`. Claude-only UI pieces like the statusline badge and `/caveman` hook command are not expected there.
+## Resources
 
-## Contract
+The default OpenShell VM driver gives a sandbox 2 vCPUs, 2 GiB of memory, and a 4 GiB writable disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config). A debug build of jackin with its tests needs about 3.5 GiB of that disk. `toolchain/mise.toml` therefore sets `CARGO_INCREMENTAL=0`, which saves about 2 GiB of incremental state, and `CARGO_BUILD_JOBS=1`, because two parallel links ran out of memory. Raise `overlay_disk_mib` in the gateway config if a build needs more room.
 
-- Final Dockerfile stage must use the digest-pinned `projectjackin/construct:<version>-trixie` base.
-- Plugins are declared in `jackin.role.toml`
-- Threat model and hard rules: see [AGENTS.md](./AGENTS.md)
+## Policy
 
-## Environment
+The filesystem policy makes the system directories read-only and allows writes to `/sandbox` and `/tmp`. The role names no Codex host. OpenShell adds the rule of the Codex provider.
 
-Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and keeps its tool pins plus the Cargo backend aliases/settings needed to install Rust tools through `cargo-binstall`. Comments and task definitions are intentionally omitted. [`jackin-toolchain/rust-toolchain.toml`](jackin-toolchain/rust-toolchain.toml) is copied from upstream as-is so Rust is installed from Jackin's tested toolchain file. Refresh both with `mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
+| Rule | Hosts | Requests |
+|---|---|---|
+| `crates_io` | `index.crates.io`, `static.crates.io`, `crates.io` | `GET`, `HEAD`, `OPTIONS` |
+| `github` | `github.com` | `GET` of `info/refs`, `POST` of `git-upload-pack`, `GET` of release downloads |
+| `github` | `codeload.github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`, `api.github.com` | `GET`, `HEAD`, `OPTIONS` |
+| `mise_downloads` | the hosts that `mise install` needs for the pinned tools | `GET`, `HEAD`, `OPTIONS` |
 
-Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`, `HEADROOM_VERSION`, `UV_VERSION`, `RTK_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+Only the toolchain, `mise`, and `git` can use these rules. No rule allows a push. Review every new host as a new path for content from a prompt injection.
 
-- **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml` installed through `cargo-binstall`
-- **Rust** (via mise) with clippy, rustfmt, rust-analyzer
-- **Cargo helper tools**: cargo-watch and lychee
-- **Node.js** (via mise)
-- **Bun** (via mise) for jackin docs development
-- **OpenTofu** (via mise)
-- **Context7** (npm) — up-to-date library docs via MCP
-- **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)
-- **Headroom** (uv tool) — MCP tools for compressing large context inputs
-- **RTK** (mise/aqua) — deterministic shell-output compression
-- System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
-- **xxd** — hex dump and binary patch helper
+## Check and use the role
 
-Shared shell/runtime tools come from `projectjackin/construct:trixie`.
+The repository gate is `mise run test`. It runs `prek run --all-files`: gitleaks and hadolint.
 
-## Plugins
+Build jackin in the jackin repository. The role gate runs the binary `jackin/target/debug/jackin` from this directory:
 
-Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` and bootstrapped at runtime by jackin. Marketplaces beyond `@claude-plugins-official`:
+```sh
+jackin role check .
+```
 
-- `@jackin-marketplace` — [jackin-project/jackin-marketplace](https://github.com/jackin-project/jackin-marketplace) (source of `jackin-dev`)
-- `@tailrocks-rust-skills` — [tailrocks/tailrocks-rust-skills](https://github.com/tailrocks/tailrocks-rust-skills) (Rust guidance, project setup, review, refactoring, and remediation)
-- `@tailrocks-roadmap-skills` — [tailrocks/tailrocks-roadmap-skills](https://github.com/tailrocks/tailrocks-roadmap-skills) (research, brainstorming, planning, verification, and delivery)
-- `@caveman` — [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) (source of `caveman`; pinned to a tagged release via Dockerfile `CAVEMAN_VERSION`)
+Register the role, then load it with a project directory:
 
-Invoke these skills explicitly; the Roadmap pack covers proposal work through idea capture, research, and planning skills.
+```sh
+jackin role add the-architect .
+jackin load the-architect <project>
+```
 
-Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
+## CI
 
-## Skills
-
-Installed at build time via `skills add` for supported Agent Skills hosts (`claude-code`, `codex`, `amp`, `opencode`, and `kimi-code-cli`):
-
-- `improve` — [shadcn/improve](https://github.com/shadcn/improve): read-only advisor that audits a codebase and writes self-contained implementation plans under `plans/` for other agents to execute.
-
-## Runtime hooks
-
-The `hooks/preflight.sh` script runs before the agent CLI starts:
-
-1. **Context7** — non-interactive MCP setup (skips if unset).
-2. **Headroom MCP** — for active agent.
-3. **Caveman/RTK hooks** — for claude; skills for codex.
-4. **Codex caveman check**.
-
-## PR workflow
-
-Reference for which Claude Code review command to run at which point in a PR's life: see [`docs/pr-workflow.md`](./docs/pr-workflow.md).
+`.github/` and `config/fleet/` are generated by `velnor-actions generate` from `.velnor/config.toml`. Do not edit them by hand.
 
 ## License
 

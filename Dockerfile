@@ -1,162 +1,76 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-FROM projectjackin/construct:0.37-trixie@sha256:67fc093e1dd9a021e2af66beebbeddbb4d676839dcd0a5371ce8a5d7b2cdcab4
+ARG MISE_VERSION=2026.10.25
+ARG MISE_SHA256_ARM64=a7d1e2add53441ff76e7e971e7a3fb15c117741836ce51c026f5fb7eebe7dbcf
+ARG MISE_SHA256_AMD64=199966edaad1b208eb4c72955f1722dafb8fa799f575db720dea05aaa8216546
+ARG GIT_VERSION=2.56.0
+ARG GIT_SHA256=26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+FROM scratch AS mise-archive-arm64
+ARG MISE_VERSION
+ARG MISE_SHA256_ARM64
+ADD --checksum=sha256:${MISE_SHA256_ARM64} https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-arm64.tar.gz /mise.tar.gz
 
-ARG CARGO_BINSTALL_VERSION=1.23.0
-ARG OPENTOFU_VERSION=1.12.6
-# CAVEMAN_VERSION must be tagged release.
-ARG CAVEMAN_VERSION=2.7.0
-ARG CTX7_VERSION=0.5.11
-ARG SKILLS_VERSION=1.5.22
-# HEADROOM_VERSION.
-ARG HEADROOM_VERSION=0.37.0
-# UV_VERSION.
-ARG UV_VERSION=0.12.15
-# RTK_VERSION (aqua).
-ARG RTK_VERSION=0.49.0
+FROM scratch AS mise-archive-amd64
+ARG MISE_VERSION
+ARG MISE_SHA256_AMD64
+ADD --checksum=sha256:${MISE_SHA256_AMD64} https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-x64.tar.gz /mise.tar.gz
 
-USER root
+FROM mise-archive-${TARGETARCH} AS mise-archive
+
+FROM scratch AS git-source
+ARG GIT_VERSION
+ARG GIT_SHA256
+ADD --checksum=sha256:${GIT_SHA256} https://www.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz /git.tar.xz
+
+FROM construct AS git-build
+ARG GIT_VERSION
+
+USER 0
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    libssl-dev \
-    openssl \
-    pkg-config \
-    cmake \
-    xxd && \
-    apt-get autoremove -y
+    apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        build-essential \
+        gettext \
+        libcurl4-gnutls-dev \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-USER agent
+RUN --mount=type=bind,from=git-source,source=/,target=/source \
+    tar -xJf /source/git.tar.xz -C /tmp \
+    && make -C "/tmp/git-${GIT_VERSION}" -j"$(nproc)" prefix=/usr gitexecdir=lib/git-core NO_PERL=1 NO_PYTHON=1 NO_TCLTK=1 NO_GETTEXT=1 NO_EXPAT=1 NO_OPENSSL=1 NO_RUST=1 all \
+    && make -C "/tmp/git-${GIT_VERSION}" prefix=/usr gitexecdir=lib/git-core NO_PERL=1 NO_PYTHON=1 NO_TCLTK=1 NO_GETTEXT=1 NO_EXPAT=1 NO_OPENSSL=1 NO_RUST=1 DESTDIR=/out install
 
-ENV MISE_TRUSTED_CONFIG_PATHS=/workspace:/tmp/jackin-mise
+FROM construct
 
-COPY --chown=root:root jackin-toolchain/ /tmp/jackin-mise/
+ARG GIT_VERSION
 
-RUN mkdir -p \
-    "${HOME}/.cache/amp" \
-    "${HOME}/.cache/mise" \
-    "${HOME}/.cargo/bin" \
-    "${HOME}/.cargo/registry" \
-    "${HOME}/.cargo/git"
+USER 0
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        build-essential \
+        cmake \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-# Per-tool RUNs (caching).
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
-    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}"
+RUN --mount=type=bind,from=mise-archive,source=/,target=/archive \
+    tar -xzf /archive/mise.tar.gz --no-same-owner --strip-components=2 -C /usr/local/bin mise/bin/mise \
+    && mise --version
 
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
-    --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise trust /tmp/jackin-mise/mise.toml && \
-    mkdir -p "${HOME}/.config/mise" && \
-    cp /tmp/jackin-mise/mise.toml "${HOME}/.config/mise/config.toml" && \
-    : "Keep cargo-binstall pinned before installing Cargo-backed mise tools" && \
-    mise use -g --pin "cargo-binstall@${CARGO_BINSTALL_VERSION}" && \
-    mise install -C /tmp/jackin-mise rust && \
-    mise use -g --pin -C /tmp/jackin-mise rust && \
-    mise install && \
-    mise exec -- rustup component add rust-analyzer
+COPY --from=git-build --chown=root:root /out/usr/ /usr/
+RUN test "$(git --version)" = "git version ${GIT_VERSION}"
 
-# cargo-binstall + caches.
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cargo/registry,uid=1000 \
-    --mount=type=cache,target=/home/agent/.cargo/git,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    . ~/.profile && \
-    cargo binstall --locked --no-confirm cargo-watch lychee
+COPY --chown=root:root toolchain/mise.toml /etc/mise/config.toml
 
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "opentofu@${OPENTOFU_VERSION}" && \
-    mise use -g --pin "opentofu@${OPENTOFU_VERSION}"
+RUN mise install \
+    && mise exec -- mbx +1.99.1 --version \
+    && mise exec -- cargo nextest --version \
+    && rm -rf /sandbox/.cache \
+    && chown -R sandbox:sandbox /sandbox
 
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise exec -- npm install -g "ctx7@${CTX7_VERSION}" "skills@${SKILLS_VERSION}"
-
-# Caveman (opencode clone, codex/amp skills).
-RUN . ~/.profile && \
-    git clone --depth 1 --branch "v${CAVEMAN_VERSION}" https://github.com/JuliusBrussee/caveman.git /tmp/caveman && \
-    node /tmp/caveman/bin/install.js --only opencode --no-mcp-shrink && \
-    test -f "${HOME}/.config/opencode/plugins/caveman/plugin.js" && \
-    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a codex --yes --global && \
-    skills add "JuliusBrussee/caveman#v${CAVEMAN_VERSION}" -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/caveman/SKILL.md" && \
-    rm -rf /tmp/caveman
-
-# jackin-dev skills.
-RUN . ~/.profile && \
-    skills add "jackin-project/jackin-dev" -s '*' -a codex --yes --global && \
-    skills add "jackin-project/jackin-dev" -s '*' -a amp --yes --global && \
-    test -f "${HOME}/.agents/skills/jackin-propose/SKILL.md" && \
-    test -f "${HOME}/.agents/skills/jackin-merge-pr/SKILL.md"
-
-# improve skill (shadcn/improve).
-RUN . ~/.profile && \
-    skills add "shadcn/improve" -a claude-code --yes --global && \
-    skills add "shadcn/improve" -a codex --yes --global && \
-    skills add "shadcn/improve" -a amp --yes --global && \
-    skills add "shadcn/improve" -a opencode --yes --global && \
-    skills add "shadcn/improve" -a kimi-code-cli --yes --global && \
-    test -f "${HOME}/.claude/skills/improve/SKILL.md" && \
-    test -f "${HOME}/.agents/skills/improve/SKILL.md"
-
-# ── Token-optimisation stack ──────────────────────────────────────────────────
-
-# AGENTS.md setup.
-RUN mkdir -p \
-    /home/agent/.config/caveman \
-    /home/agent/.claude \
-    /home/agent/.codex \
-    /home/agent/.config/amp \
-    /home/agent/.kimi-code \
-    /home/agent/.grok
-ENV CAVEMAN_DEFAULT_MODE=ultra
-COPY --chown=root:agent --chmod=440 caveman-config.json /home/agent/.config/caveman/config.json
-COPY --chown=agent:agent --chmod=644 AGENTS.md.d/ /tmp/AGENTS.md.d/
-RUN find /tmp/AGENTS.md.d -maxdepth 1 -type f -name '*.md' | sort | \
-    while IFS= read -r file; do cat "${file}"; printf '\n'; done > /tmp/AGENTS.md && \
-    install -m 0644 /tmp/AGENTS.md /home/agent/AGENTS.md && \
-    install -m 0644 /tmp/AGENTS.md /home/agent/CLAUDE.md && \
-    ln -sf /home/agent/CLAUDE.md /home/agent/.claude/CLAUDE.md && \
-    ln -sf /home/agent/AGENTS.md /home/agent/.codex/AGENTS.md && \
-    ln -sf /home/agent/AGENTS.md /home/agent/.config/amp/AGENTS.md && \
-    ln -sf /home/agent/AGENTS.md /home/agent/.kimi-code/AGENTS.md && \
-    ln -sf /home/agent/AGENTS.md /home/agent/.grok/AGENTS.md
-
-# Headroom.
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "uv@${UV_VERSION}" && \
-    mise use -g --pin "uv@${UV_VERSION}"
-
-RUN . ~/.profile && uv tool install --no-build "headroom-ai[mcp]==${HEADROOM_VERSION}"
-
-# PATH for shims.
-ENV PATH="/home/agent/.local/bin:/home/agent/.local/share/mise/shims:${PATH}"
-
-# RTK.
-RUN --mount=type=secret,id=github_token,uid=1000,required=false \
-    --mount=type=cache,target=/home/agent/.cache/mise,uid=1000 \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) \
-    mise install "rtk@${RTK_VERSION}" && \
-    mise use -g --pin "rtk@${RTK_VERSION}" && \
-    mise exec -- rtk --version
-
-ENV RTK_TELEMETRY_DISABLED=1
-
-# opencode RTK.
-RUN . ~/.profile && \
-    rtk init -g --opencode && \
-    test -f /home/agent/.config/opencode/plugins/rtk.ts
+USER 1000
