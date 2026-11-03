@@ -5,5 +5,31 @@
   ],
   "prHourlyLimit": 0,
   "prConcurrentLimit": 20,
-  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>"
+  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG MISE_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "jdx/mise",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG GIT_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "git/git",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+\\.\\d+)$"
+    }
+  ]
 }
