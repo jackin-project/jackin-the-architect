@@ -3,89 +3,44 @@
   "extends": [
     "config:best-practices"
   ],
-  "packageRules": [
-    {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["projectjackin/construct"],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-trixie$"
-    }
-  ],
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 20,
+  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
   "customManagers": [
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG CARGO_BINSTALL_VERSION=(?<currentValue>[\\d.]+)"],
+      "matchStrings": [
+        "ARG MISE_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "jdx/mise",
       "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "cargo-bins/cargo-binstall",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
+      "extractVersionTemplate": "^v(?<version>.+)$"
     },
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG OPENTOFU_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "opentofu/opentofu",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
+      "matchStrings": [
+        "ARG GIT_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "git/git",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+\\.\\d+)$"
     },
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG CAVEMAN_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "JuliusBrussee/caveman",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+      "matchStrings": [
+        "ARG RUSTUP_VERSION=(?<currentValue>\\S+)"
       ],
-      "matchStrings": ["ARG CTX7_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "npm",
-      "packageNameTemplate": "ctx7"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG HEADROOM_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "pypi",
-      "packageNameTemplate": "headroom-ai"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG UV_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "astral-sh/uv",
-      "extractVersionTemplate": "^(?<version>.+)$",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
-      ],
-      "matchStrings": ["ARG RTK_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "rtk-ai/rtk",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
+      "depNameTemplate": "rust-lang/rustup",
+      "datasourceTemplate": "github-tags"
     }
-  ],
-  "prHourlyLimit": 0,
-  "prConcurrentLimit": 20,
-  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>"
+  ]
 }

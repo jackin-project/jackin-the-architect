@@ -1,75 +1,82 @@
 # The Architect
 
-**The Architect** is the jackin agent role for developing [jackin](https://github.com/donbeave/jackin) itself (role identifier `the-architect`). It provides the Rust development environment needed to build and test the jackin CLI.
+The Architect is the jackin role for developing [jackin](https://github.com/jackin-project/jackin) itself. It is a Codex role. It gives Codex the Rust toolchain and the tools that the jackin gates need, in an OpenShell sandbox with a default-deny network policy.
 
-`jackin` validates this repo's Dockerfile, derives the final image itself, and mounts the cached repo checkout into `/workspace` when you run:
+Jackin builds the image and creates the sandbox. This repository does not publish an image. The role holds no secret.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `jackin.role.toml` | The role manifest (schema 1). It names the `Dockerfile` and the policy. The Docker capability is off. |
+| `Dockerfile` | The final stage starts `FROM construct`. It builds git from a checksum-pinned source archive, installs mise and `rustup-init` from checksum-pinned release files, and installs the locked toolchain. |
+| `toolchain/mise.toml` | The tool pins and the mise settings of the image. The `Dockerfile` copies it to `/etc/mise/config.toml`. |
+| `toolchain/mise.lock`, `toolchain/.mise/` | The lock of `toolchain/mise.toml` for linux arm64 and amd64, with a checksum for every download. The `Dockerfile` copies them next to `/etc/mise/config.toml`. |
+| `toolchain/jackin-pins.toml` | A verbatim copy of the `[tools]` table of `mise.toml` in jackin `feature/openshell-native`. |
+| `policy.yaml` | A native OpenShell policy. Landlock is a hard requirement. The network is deny by default. Writes are allowed to `/sandbox`, `/tmp`, `/dev/null`, `/dev/shm`, `/dev/ptmx`, and `/dev/pts`. |
+| `scripts/check-jackin-pins.sh`, `scripts/lock-toolchain.sh` | The pin check and the lock generator. |
+
+## Toolchain
+
+`toolchain/mise.toml` holds the same `[tools]` pins as `mise.toml` in jackin: Rust 1.99.1 with the `mr_boxington = true` option, mr-boxington 1.29.1, cargo-nextest 0.9.151, and the other tools of the jackin gates. The image installs them with `mise install --locked` at build time, so a sandbox starts the gate without a download. The lock gives a URL and a SHA-256 checksum for each download of each tool, with one exception: Rust, which rustup downloads over HTTPS and checks against the SHA-256 values of the channel manifest. `cargo-shear` comes from the `github:Boshen/cargo-shear` backend, which the lock pins by the checksum of its release archive for each architecture.
+
+The `Dockerfile` installs rustup itself before mise runs. It takes `rustup-init` 1.29.2 from `static.rust-lang.org` with `ADD --checksum` for each architecture, runs it with `--default-toolchain none`, and sets `auto-self-update` to `disable`. When `RUSTUP_HOME/settings.toml` and `CARGO_HOME/bin` exist, mise skips its own bootstrap, which downloads and runs the unpinned script from `sh.rustup.rs`. mise then installs the pinned Rust toolchain with this rustup.
+
+The tools live in root-owned directories: mise installs in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. The build fails when anything in those two directories, other than a symbolic link, is not owned by root or is writable by a group or by others. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
+
+The image also replaces `/usr/bin/git` with git 2.56.0, built with https support. The jackin tests run the first `git` in `/usr/bin`, and jackin refuses a host git older than 2.45.4. The construct image has git 2.43.0.
+
+The pins follow jackin. `scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` table of `toolchain/mise.toml` differs from `toolchain/jackin-pins.toml`, or when the `Dockerfile` selects a Rust other than the pinned one. The CI task `jackin-pins` (`mise run check:jackin-pins`) fetches `mise.toml` from jackin `feature/openshell-native` and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`. To change a pin, copy the table from jackin into both files in one commit, then run `mise run lock:toolchain` and commit the lock.
+
+`MISE_VERSION`, `RUSTUP_VERSION`, and `GIT_VERSION` in the `Dockerfile` have Renovate rules. Renovate cannot compute the SHA-256 `ARG` values, so a Renovate pull request for any of them fails the build at the checksum until you replace the hashes by hand.
+
+Run the jackin gate in a sandbox of this role:
 
 ```sh
-jackin load the-architect
-# or, with the codex CLI instead of claude:
-jackin load the-architect --agent codex
+mise exec -- mbx +1.99.1 xtask ci --fast
 ```
 
-In a Codex session, caveman is delivered through Codex skills under `~/.agents/skills` rather than the Claude plugin/statusline path; trigger it with text such as `caveman mode`. Claude-only UI pieces like the statusline badge and `/caveman` hook command are not expected there.
+## Resources
 
-## Contract
+Give the sandbox enough disk and memory for a debug build of jackin with its tests. The default OpenShell VM driver gives 2 vCPUs, 2 GiB of memory, and a 4 GiB disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config), which is too small: the build needs about 3.5 GiB of disk even without incremental state, and two parallel links ran out of memory. Raise those values in the gateway config. The gate was tested in a sandbox with 8 vCPUs, 16 GiB of memory, and a 32 GiB disk. The role sets no Cargo variable.
 
-- Final Dockerfile stage must use the digest-pinned `projectjackin/construct:<version>-trixie` base.
-- Plugins are declared in `jackin.role.toml`
-- Threat model and hard rules: see [AGENTS.md](./AGENTS.md)
+## Policy
 
-## Environment
+The filesystem policy makes the system directories read-only and allows writes to `/sandbox`, `/tmp`, and a few device paths. The role names no Codex host. OpenShell adds the rule of the Codex provider.
 
-Jackin development tool versions come from [`jackin-project/jackin`](https://github.com/jackin-project/jackin). [`jackin-toolchain/mise.toml`](jackin-toolchain/mise.toml) is generated from the upstream `mise.toml` and keeps its tool pins plus the Cargo backend aliases/settings needed to install Rust tools through `cargo-binstall`. Comments and task definitions are intentionally omitted. [`jackin-toolchain/rust-toolchain.toml`](jackin-toolchain/rust-toolchain.toml) is copied from upstream as-is so Rust is installed from Jackin's tested toolchain file. Refresh both with `mise exec cargo:rust-script@0.36.0 -- scripts/update-jackin-toolchain.rs`; the scheduled `Jackin Toolchain` workflow opens a PR when upstream tool pins change.
+The egress boundary is the host, the method, and the path (`GET` and `POST` rules with an optional query match). The `binaries` list of a rule is not a security boundary: OpenShell matches a process or any of its ancestors, a process can start through another matched binary, and `/sandbox` is writable. The lists name only root-owned paths, so they narrow the rules to the toolchain and git without promising more.
 
-Architect-only bootstrap tools remain pinned in `Dockerfile` ARGs (`CARGO_BINSTALL_VERSION`, `OPENTOFU_VERSION`, `CAVEMAN_VERSION`, `CTX7_VERSION`, `HEADROOM_VERSION`, `UV_VERSION`, `RTK_VERSION`); bump via `docker build --build-arg <NAME>=<value>`.
+| Rule | Host | Requests |
+|---|---|---|
+| `crates_io` | `index.crates.io`, `static.crates.io` | `GET`, `HEAD`, `OPTIONS` |
+| `github` | `github.com` | `GET` of `/<owner>/<repo>/info/refs?service=git-upload-pack`, `POST` of `/<owner>/<repo>/git-upload-pack` |
 
-- **Jackin toolchain** (via mise): Node.js, Bun, Zig, Syft, Cosign, and Jackin's cargo tools from upstream `mise.toml` installed through `cargo-binstall`
-- **Rust** (via mise) with clippy, rustfmt, rust-analyzer
-- **Cargo helper tools**: cargo-watch and lychee
-- **Node.js** (via mise)
-- **Bun** (via mise) for jackin docs development
-- **OpenTofu** (via mise)
-- **Context7** (npm) — up-to-date library docs via MCP
-- **Caveman** token-compression hooks + skills (claude + codex profiles, pinned to a tagged release)
-- **Headroom** (uv tool) — MCP tools for compressing large context inputs
-- **RTK** (mise/aqua) — deterministic shell-output compression
-- System build tools (`build-essential`, `libssl-dev`, `pkg-config`, `cmake`)
-- **xxd** — hex dump and binary patch helper
+The role allows nothing else; OpenShell adds the rule of the Codex provider. No rule allows a push. The two `github.com` paths have exactly two segments before `info/refs` and `git-upload-pack`, as every path that the gate uses has. The policy names no repository, because a role user adds git dependencies to jackin over time (jackin will soon add `tailrocks/terminal-components-baseline`) and an allowlist of repositories would break the role at each one.
 
-Shared shell/runtime tools come from `projectjackin/construct:trixie`.
+The open path stays: the sandbox can fetch any public repository and any crate. A process that holds a secret can send it out at a low rate in the owner and repository name of a `github.com` URL, in the path or query of a crates.io request, or in the body of a `git-upload-pack` request to a repository that the attacker controls. Fetched content can also steer the agent. Review every widening of the `github` and `crates_io` rules with both in mind. The G-FAST gate passes with only these hosts, and the policy keeps a host only when a live G-FAST needs it. Review every new host as a new path for content from a prompt injection.
 
-## Plugins
+`/dev/ptmx` and `/dev/pts` are writable because the jackin tests and the tool terminals of Codex open pseudo-terminals. The cost: a process in the sandbox can open the slave side of another pseudo-terminal that the sandbox owns, read what the other session writes, and inject keystrokes or terminal escape sequences into it. Only sessions of the same sandbox are affected.
 
-Declared in [`jackin.role.toml`](./jackin.role.toml) under `[claude].plugins` and bootstrapped at runtime by jackin. Marketplaces beyond `@claude-plugins-official`:
+## Check and use the role
 
-- `@jackin-marketplace` — [jackin-project/jackin-marketplace](https://github.com/jackin-project/jackin-marketplace) (source of `jackin-dev`)
-- `@tailrocks-rust-skills` — [tailrocks/tailrocks-rust-skills](https://github.com/tailrocks/tailrocks-rust-skills) (Rust guidance, project setup, review, refactoring, and remediation)
-- `@tailrocks-roadmap-skills` — [tailrocks/tailrocks-roadmap-skills](https://github.com/tailrocks/tailrocks-roadmap-skills) (research, brainstorming, planning, verification, and delivery)
-- `@caveman` — [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) (source of `caveman`; pinned to a tagged release via Dockerfile `CAVEMAN_VERSION`)
+The repository gate is `mise run test`. It runs `prek run --all-files`: gitleaks, hadolint, and the pin check.
 
-Invoke these skills explicitly; the Roadmap pack covers proposal work through idea capture, research, and planning skills.
+Build jackin in the jackin repository. The role gate runs the binary `jackin/target/debug/jackin` from this directory:
 
-Trust rationale: see [AGENTS.md § Threat model](./AGENTS.md#threat-model).
+```sh
+jackin role check .
+```
 
-## Skills
+Register the role, then load it with a project directory:
 
-Installed at build time via `skills add` for supported Agent Skills hosts (`claude-code`, `codex`, `amp`, `opencode`, and `kimi-code-cli`):
+```sh
+jackin role add the-architect .
+jackin load the-architect <project>
+```
 
-- `improve` — [shadcn/improve](https://github.com/shadcn/improve): read-only advisor that audits a codebase and writes self-contained implementation plans under `plans/` for other agents to execute.
+## CI
 
-## Runtime hooks
-
-The `hooks/preflight.sh` script runs before the agent CLI starts:
-
-1. **Context7** — non-interactive MCP setup (skips if unset).
-2. **Headroom MCP** — for active agent.
-3. **Caveman/RTK hooks** — for claude; skills for codex.
-4. **Codex caveman check**.
-
-## PR workflow
-
-Reference for which Claude Code review command to run at which point in a PR's life: see [`docs/pr-workflow.md`](./docs/pr-workflow.md).
+`.github/` and `config/fleet/` are generated by `velnor-actions generate` from `.velnor/config.toml`. Do not edit them by hand.
 
 ## License
 

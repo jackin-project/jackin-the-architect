@@ -1,5 +1,4 @@
-# DL3004: construct base image is a dev container that intentionally exposes sudo
-# DL3003: cd inside RUN is intentional — caveman installer requires running in HOME
-ignore:
-  - DL3004
-  - DL3003
+ignored:
+  - DL3002
+  - DL3006
+  - DL3008

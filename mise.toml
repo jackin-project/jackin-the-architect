@@ -2,16 +2,27 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [tools]
-actionlint = "1.7.12"
+jactionlint = "2.3.0"
 gitleaks = "8.30.1"
-prek = "0.5.3"
-python = "3.14.7"
-uv = "0.12.15"
-"pipx:reuse" = { version = "6.2.0", extras = "charset-normalizer", depends = ["python"] }
+hadolint = "2.15.1"
+prek = "0.5.9"
+python = "3.15.2"
+uv = "0.13.7"
+"pipx:reuse" = { version = "6.3.0", extras = "charset-normalizer", depends = ["python"] }
 
 [settings]
 lockfile = true
 
 [tasks.test]
-description = "Run the repository gate"
+description = "Run the repository test gate"
 run = "prek run --all-files"
+tools = { gitleaks = "8.30.1", hadolint = "2.15.1", prek = "0.5.9" }
+
+[tasks."check:jackin-pins"]
+description = "Compare the pinned jackin tools with jackin feature/openshell-native"
+run = "scripts/check-jackin-pins.sh --upstream"
+
+[tasks."lock:toolchain"]
+description = "Regenerate toolchain/mise.lock for linux arm64 and amd64"
+run = "scripts/lock-toolchain.sh"
+tools = { python = "3.15.2", uv = "0.13.7" }

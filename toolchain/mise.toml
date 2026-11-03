@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[tools]
+"aqua:betterleaks/betterleaks" = "1.9.0"
+bun = "1.4.4"
+cargo-binstall = "1.26.2"
+cargo-deny = "0.20.2"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.151"
+"github:Boshen/cargo-shear" = "1.14.0"
+gh = "2.103.3"
+"aqua:gitleaks/gitleaks" = "8.30.1"
+hk = "2.11.0"
+"github:mongodb/kingfisher" = { version = "2.16.0", matching_regex = "^kingfisher-(darwin|linux)-(arm64|x64)\\.tgz$|^kingfisher-windows-x64\\.zip$" }
+mr-boxington = { version = "1.29.1", workflow = "release.yml@refs/heads/main" }
+rust = { version = "1.99.1", profile = "minimal", components = [
+  "clippy",
+  "rustfmt",
+], targets = [
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+], mr_boxington = true }
+shellcheck = "0.11.0"
+jactionlint = "2.3.0"
+rumdl = "0.3.2"
+uv = "0.13.7"
+node = "26.13.0"
+python = "3.15.2"
+"pipx:reuse" = { version = "6.3.0", extras = "charset-normalizer" }
+zizmor = "1.32.0"
+
+[settings]
+lockfile = true
+rust.rustup_home = "/usr/local/rustup"
+rust.cargo_home = "/sandbox/.cargo"
