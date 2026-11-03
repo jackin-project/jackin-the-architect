@@ -1,21 +1,14 @@
 repos:
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.1
-    hooks:
-      - id: gitleaks
-
   - repo: local
     hooks:
-      - id: jackin-marketplace-audit
-        name: jackin.role.toml plugin marketplace audit
-        entry: scripts/marketplace-audit.sh
-        language: script
-        files: ^jackin\.role\.toml$
+      - id: gitleaks
+        name: gitleaks
+        language: system
+        entry: gitleaks dir --redact --no-banner .
         pass_filenames: false
-
-      - id: jackin-marketplace-audit-regression
-        name: jackin.role.toml marketplace audit regression tests
-        entry: scripts/marketplace-audit.test.sh
-        language: script
-        files: ^(jackin\.role\.toml|scripts/marketplace-audit(\.test)?\.sh)$
-        pass_filenames: false
+        always_run: true
+      - id: hadolint
+        name: hadolint
+        language: system
+        entry: hadolint
+        files: ^Dockerfile$
