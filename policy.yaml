@@ -17,6 +17,7 @@ filesystem_policy:
   read_write:
     - /tmp
     - /dev/null
+    - /dev/shm
     - /sandbox
 landlock:
   compatibility: hard_requirement
