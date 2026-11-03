@@ -29,6 +29,10 @@ mise exec -- mbx +1.99.1 xtask ci --fast
 
 The default OpenShell VM driver gives a sandbox 2 vCPUs, 2 GiB of memory, and a 4 GiB writable disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config). A debug build of jackin with its tests needs about 3.5 GiB of that disk. `toolchain/mise.toml` therefore sets `CARGO_INCREMENTAL=0`, which saves about 2 GiB of incremental state, and `CARGO_BUILD_JOBS=1`, because two parallel links ran out of memory. Raise `overlay_disk_mib` in the gateway config if a build needs more room.
 
+## Known limit
+
+OpenShell 0.1.6 denies group signals in a sandbox (`kill(-pgid, ...)` returns `EPERM`). The jackin tests of `TokioProcessRunner` in `crates/jackin-session/tests/process_runner/lifecycle.rs` kill process groups, so `xtask ci --fast` stops at the nextest step in a sandbox of this role. The other steps pass.
+
 ## Policy
 
 The filesystem policy makes the system directories read-only and allows writes to `/sandbox` and `/tmp`. The role names no Codex host. OpenShell adds the rule of the Codex provider.
