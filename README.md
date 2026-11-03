@@ -29,10 +29,6 @@ mise exec -- mbx +1.99.1 xtask ci --fast
 
 Give the sandbox enough disk and memory for a debug build of jackin with its tests. The default OpenShell VM driver gives 2 vCPUs, 2 GiB of memory, and a 4 GiB disk (`vcpus`, `mem_mib`, and `overlay_disk_mib` in the gateway config), which is too small: the build needs about 3.5 GiB of disk even without incremental state, and two parallel links ran out of memory. Raise those values in the gateway config. The role sets no Cargo variable.
 
-## Known limits
-
-OpenShell 0.1.6 denies group signals in a sandbox (`kill(-pgid, ...)` returns `EPERM`), and the sandbox `/dev` has no `/dev/stdin` link. `xtask ci --fast` therefore stops at the nextest step in a sandbox of this role while a jackin test relies on either. The other steps pass.
-
 ## Policy
 
 The filesystem policy makes the system directories read-only and allows writes to `/sandbox` and `/tmp`. The role names no Codex host. OpenShell adds the rule of the Codex provider.
