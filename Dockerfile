@@ -29,15 +29,14 @@ FROM construct AS git-build
 ARG GIT_VERSION
 
 USER 0
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=the-architect-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=the-architect-apt-lib,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install --yes --no-install-recommends \
         build-essential \
         gettext \
         libcurl4-gnutls-dev \
-        zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
+        zlib1g-dev
 
 RUN --mount=type=bind,from=git-source,source=/,target=/source \
     tar -xJf /source/git.tar.xz -C /tmp \
@@ -49,28 +48,38 @@ FROM construct
 ARG GIT_VERSION
 
 USER 0
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,id=the-architect-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=the-architect-apt-lib,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install --yes --no-install-recommends \
         build-essential \
         cmake \
-        pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+        pkg-config
 
 RUN --mount=type=bind,from=mise-archive,source=/,target=/archive \
     tar -xzf /archive/mise.tar.gz --no-same-owner --strip-components=2 -C /usr/local/bin mise/bin/mise \
     && mise --version
 
+RUN rm -rf /usr/lib/git-core
 COPY --from=git-build --chown=root:root /out/usr/ /usr/
-RUN test "$(git --version)" = "git version ${GIT_VERSION}"
+RUN test "$(git --version)" = "git version ${GIT_VERSION}" \
+    && test -x /usr/lib/git-core/git-remote-https \
+    && ldd /usr/lib/git-core/git-remote-https > /tmp/ldd.txt \
+    && ! grep -q "not found" /tmp/ldd.txt \
+    && rm /tmp/ldd.txt
 
 COPY --chown=root:root toolchain/mise.toml /etc/mise/config.toml
+COPY --chown=root:root toolchain/mise.lock /etc/mise/mise.lock
+COPY --chown=root:root toolchain/.mise/ /etc/mise/.mise/
 
-RUN mise install \
-    && mise exec -- mbx +1.99.1 --version \
-    && mise exec -- cargo nextest --version \
-    && rm -rf /sandbox/.cache \
-    && chown -R sandbox:sandbox /sandbox
+RUN export MISE_DATA_DIR=/usr/local/share/mise \
+    && mkdir -p /sandbox/.cargo \
+    && mise install --locked python uv \
+    && mise install --locked \
+    && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
+    && chown -R sandbox:sandbox /sandbox/.cargo
 
 USER 1000
+RUN mise exec -- mbx +1.99.1 --version \
+    && mise exec -- cargo nextest --version \
+    && rm -rf /sandbox/.cache /sandbox/.local

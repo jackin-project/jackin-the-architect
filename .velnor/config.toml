@@ -9,6 +9,14 @@ generator_validation = "bootstrap"
 max_parallel_jobs = 2
 
 [[workflow.tasks]]
+id = "jackin-pins"
+kind = "verification"
+mise_task = "check:jackin-pins"
+source = { mise_config = "mise.toml", working_directory = "." }
+runner = "linux-x64"
+timeout_minutes = 5
+
+[[workflow.tasks]]
 id = "test"
 kind = "verification"
 mise_task = "test"

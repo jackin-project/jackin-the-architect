@@ -215,6 +215,7 @@ jobs:
     needs:
       - jactionlint
       - plan
+      - task-jackin-pins
       - task-test
     if: ${{ !cancelled() }}
     steps:
@@ -266,7 +267,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"task-test\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"task-jackin-pins\",\"task-test\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
       - name: Merge reports
@@ -274,7 +275,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
-          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"task-test\"]"
+          VELNOR_NEEDS_EXPECTED: "[\"jactionlint\",\"plan\",\"task-jackin-pins\",\"task-test\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.72'"
       - name: Publish final report
@@ -298,6 +299,32 @@ jobs:
       - name: Fail unless the verdict passed
         if: ${{ always() && needs.required.result != 'success' }}
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR false
+  task-jackin-pins:
+    name: Verify jackin-pins
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env:
+      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: ccfe12d7a62c6fb9def2a20db1f210f13a51de881f21fd8c85db4b6312405d07
+          version: 2026.10.21
+      - name: Run declared Mise task
+        env:
+          MISE_CARGO_BINSTALL_ONLY: "1"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; for name in ${!MISE_@}; do unset \"$name\"; done; umask 077; task_root=\"${RUNNER_TEMP}/velnor-verification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-jackin-pins\"; test -n \"$RUNNER_TEMP\" && test -n \"$GITHUB_WORKSPACE\" && test -n \"$GITHUB_RUN_ID\" && test -n \"$GITHUB_RUN_ATTEMPT\"; [[ \"$GITHUB_RUN_ID\" =~ ^[0-9]+$ ]]; [[ \"$GITHUB_RUN_ATTEMPT\" =~ ^[0-9]+$ ]]; cd -P \"$GITHUB_WORKSPACE\"; workspace_root=\"$PWD\"; test -d \"$workspace_root/.\"; test ! -L \"$workspace_root/.\"; cd -P \"$workspace_root/.\"; task_working_directory=\"$PWD\"; /bin/mkdir -m 700 \"$task_root\"; /bin/mkdir -m 700 \"$task_root/home\" \"$task_root/home/config\" \"$task_root/home/data\" \"$task_root/home/cache\" \"$task_root/home/state\" \"$task_root/config\" \"$task_root/data\" \"$task_root/cache\" \"$task_root/state\" \"$task_root/cargo\" \"$task_root/rustup\"; : > \"$task_root/global.toml\"; : > \"$task_root/system.toml\"; export HOME=\"$task_root/home\"; export XDG_CONFIG_HOME=\"$task_root/home/config\"; export XDG_DATA_HOME=\"$task_root/home/data\"; export XDG_CACHE_HOME=\"$task_root/home/cache\"; export XDG_STATE_HOME=\"$task_root/home/state\"; export MISE_CONFIG_DIR=\"$task_root/config\"; export MISE_DATA_DIR=\"$task_root/data\"; export MISE_CACHE_DIR=\"$task_root/cache\"; export MISE_STATE_DIR=\"$task_root/state\"; export CARGO_HOME=\"$task_root/cargo\"; export RUSTUP_HOME=\"$task_root/rustup\"; export MISE_GLOBAL_CONFIG_FILE=\"$task_root/global.toml\"; export MISE_SYSTEM_CONFIG_FILE=\"$task_root/system.toml\"; export MISE_AUTO_INSTALL=false; export MISE_EXEC_AUTO_INSTALL=false; export MISE_TASK_RUN_AUTO_INSTALL=false; export MISE_AUTO_ENV=false; export MISE_NO_ENV=1; export MISE_CEILING_PATHS=\"$workspace_root/..\"; export MISE_TRUSTED_CONFIG_PATHS=\"$workspace_root\"; export MISE_NO_HOOKS=1; export MISE_CARGO_BINSTALL_ONLY=1; unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE; test -f \"$workspace_root/mise.toml\"; test ! -L \"$workspace_root/mise.toml\"; /usr/bin/sha256sum  \"$workspace_root/mise.toml\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"d3a492adec57d5c263949e51fe9bed14ce1457ce12c9e3c231a938dcbb531342\"; test -f \"$workspace_root/mise.lock\"; test ! -L \"$workspace_root/mise.lock\"; /usr/bin/sha256sum  \"$workspace_root/mise.lock\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"921dd5d8519fca426723bf6c2d9dace590d198b6919c0e331ff9926d63e6e33f\"; test ! -e \"$workspace_root/rust-toolchain.toml\" && test ! -L \"$workspace_root/rust-toolchain.toml\"; command -v jq > \"$task_root/jq_path.txt\"; IFS= read -r jq_path < \"$task_root/jq_path.txt\"; test -n \"$jq_path\"; test -x \"$jq_path\"; \"$jq_path\" --version | /usr/bin/grep -Eqx '\\''jq-1\\.8\\.[0-9]+'\\''; mise --no-env --no-hooks config ls --json | \"$jq_path\" -r '\\''.[].path'\\'' | LC_ALL=C /usr/bin/sort > \"$task_root/mise_configs.txt\"; workspace_config_found=false; while IFS= read -r path; do case \"$path\" in \"$workspace_root/mise.toml\") workspace_config_found=true ;; \"$workspace_root/rust-toolchain.toml\"|\"$task_root/global.toml\"|\"$task_root/system.toml\") ;; *) exit 1 ;; esac; done < \"$task_root/mise_configs.txt\"; [[ \"$workspace_config_found\" == true ]]; mise --no-env --locked --no-hooks run --skip-tools check:jackin-pins'"
   task-test:
     name: Verify test
     runs-on: ubuntu-26.04
@@ -327,7 +354,7 @@ jobs:
       - name: Run declared Mise task
         env:
           MISE_CARGO_BINSTALL_ONLY: "1"
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; for name in ${!MISE_@}; do unset \"$name\"; done; umask 077; task_root=\"${RUNNER_TEMP}/velnor-verification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-test\"; test -n \"$RUNNER_TEMP\" && test -n \"$GITHUB_WORKSPACE\" && test -n \"$GITHUB_RUN_ID\" && test -n \"$GITHUB_RUN_ATTEMPT\"; [[ \"$GITHUB_RUN_ID\" =~ ^[0-9]+$ ]]; [[ \"$GITHUB_RUN_ATTEMPT\" =~ ^[0-9]+$ ]]; cd -P \"$GITHUB_WORKSPACE\"; workspace_root=\"$PWD\"; test -d \"$workspace_root/.\"; test ! -L \"$workspace_root/.\"; cd -P \"$workspace_root/.\"; task_working_directory=\"$PWD\"; test -d \"$task_root\"; export HOME=\"$task_root/home\"; export XDG_CONFIG_HOME=\"$task_root/home/config\"; export XDG_DATA_HOME=\"$task_root/home/data\"; export XDG_CACHE_HOME=\"$task_root/home/cache\"; export XDG_STATE_HOME=\"$task_root/home/state\"; export MISE_CONFIG_DIR=\"$task_root/config\"; export MISE_DATA_DIR=\"$task_root/data\"; export MISE_CACHE_DIR=\"$task_root/cache\"; export MISE_STATE_DIR=\"$task_root/state\"; export CARGO_HOME=\"$task_root/cargo\"; export RUSTUP_HOME=\"$task_root/rustup\"; export MISE_GLOBAL_CONFIG_FILE=\"$task_root/global.toml\"; export MISE_SYSTEM_CONFIG_FILE=\"$task_root/system.toml\"; export MISE_AUTO_INSTALL=false; export MISE_EXEC_AUTO_INSTALL=false; export MISE_TASK_RUN_AUTO_INSTALL=false; export MISE_AUTO_ENV=false; export MISE_NO_ENV=1; export MISE_CEILING_PATHS=\"$workspace_root/..\"; export MISE_TRUSTED_CONFIG_PATHS=\"$workspace_root\"; export MISE_NO_HOOKS=1; export MISE_CARGO_BINSTALL_ONLY=1; unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE; test -f \"$workspace_root/mise.toml\"; test ! -L \"$workspace_root/mise.toml\"; /usr/bin/sha256sum  \"$workspace_root/mise.toml\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"79e28efe63a133da49d0b3f474cda52d492136ba73240523a0aa2f1587cc452d\"; test -f \"$workspace_root/mise.lock\"; test ! -L \"$workspace_root/mise.lock\"; /usr/bin/sha256sum  \"$workspace_root/mise.lock\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"921dd5d8519fca426723bf6c2d9dace590d198b6919c0e331ff9926d63e6e33f\"; test ! -e \"$workspace_root/rust-toolchain.toml\" && test ! -L \"$workspace_root/rust-toolchain.toml\"; command -v jq > \"$task_root/jq_path.txt\"; IFS= read -r jq_path < \"$task_root/jq_path.txt\"; test -n \"$jq_path\"; test -x \"$jq_path\"; \"$jq_path\" --version | /usr/bin/grep -Eqx '\\''jq-1\\.8\\.[0-9]+'\\''; mise --no-env --no-hooks config ls --json | \"$jq_path\" -r '\\''.[].path'\\'' | LC_ALL=C /usr/bin/sort > \"$task_root/mise_configs.txt\"; workspace_config_found=false; while IFS= read -r path; do case \"$path\" in \"$workspace_root/mise.toml\") workspace_config_found=true ;; \"$workspace_root/rust-toolchain.toml\"|\"$task_root/global.toml\"|\"$task_root/system.toml\") ;; *) exit 1 ;; esac; done < \"$task_root/mise_configs.txt\"; [[ \"$workspace_config_found\" == true ]]; mise --no-env --locked --no-hooks run --skip-tools test'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; for name in ${!MISE_@}; do unset \"$name\"; done; umask 077; task_root=\"${RUNNER_TEMP}/velnor-verification-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-test\"; test -n \"$RUNNER_TEMP\" && test -n \"$GITHUB_WORKSPACE\" && test -n \"$GITHUB_RUN_ID\" && test -n \"$GITHUB_RUN_ATTEMPT\"; [[ \"$GITHUB_RUN_ID\" =~ ^[0-9]+$ ]]; [[ \"$GITHUB_RUN_ATTEMPT\" =~ ^[0-9]+$ ]]; cd -P \"$GITHUB_WORKSPACE\"; workspace_root=\"$PWD\"; test -d \"$workspace_root/.\"; test ! -L \"$workspace_root/.\"; cd -P \"$workspace_root/.\"; task_working_directory=\"$PWD\"; test -d \"$task_root\"; export HOME=\"$task_root/home\"; export XDG_CONFIG_HOME=\"$task_root/home/config\"; export XDG_DATA_HOME=\"$task_root/home/data\"; export XDG_CACHE_HOME=\"$task_root/home/cache\"; export XDG_STATE_HOME=\"$task_root/home/state\"; export MISE_CONFIG_DIR=\"$task_root/config\"; export MISE_DATA_DIR=\"$task_root/data\"; export MISE_CACHE_DIR=\"$task_root/cache\"; export MISE_STATE_DIR=\"$task_root/state\"; export CARGO_HOME=\"$task_root/cargo\"; export RUSTUP_HOME=\"$task_root/rustup\"; export MISE_GLOBAL_CONFIG_FILE=\"$task_root/global.toml\"; export MISE_SYSTEM_CONFIG_FILE=\"$task_root/system.toml\"; export MISE_AUTO_INSTALL=false; export MISE_EXEC_AUTO_INSTALL=false; export MISE_TASK_RUN_AUTO_INSTALL=false; export MISE_AUTO_ENV=false; export MISE_NO_ENV=1; export MISE_CEILING_PATHS=\"$workspace_root/..\"; export MISE_TRUSTED_CONFIG_PATHS=\"$workspace_root\"; export MISE_NO_HOOKS=1; export MISE_CARGO_BINSTALL_ONLY=1; unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE; test -f \"$workspace_root/mise.toml\"; test ! -L \"$workspace_root/mise.toml\"; /usr/bin/sha256sum  \"$workspace_root/mise.toml\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"d3a492adec57d5c263949e51fe9bed14ce1457ce12c9e3c231a938dcbb531342\"; test -f \"$workspace_root/mise.lock\"; test ! -L \"$workspace_root/mise.lock\"; /usr/bin/sha256sum  \"$workspace_root/mise.lock\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"921dd5d8519fca426723bf6c2d9dace590d198b6919c0e331ff9926d63e6e33f\"; test ! -e \"$workspace_root/rust-toolchain.toml\" && test ! -L \"$workspace_root/rust-toolchain.toml\"; command -v jq > \"$task_root/jq_path.txt\"; IFS= read -r jq_path < \"$task_root/jq_path.txt\"; test -n \"$jq_path\"; test -x \"$jq_path\"; \"$jq_path\" --version | /usr/bin/grep -Eqx '\\''jq-1\\.8\\.[0-9]+'\\''; mise --no-env --no-hooks config ls --json | \"$jq_path\" -r '\\''.[].path'\\'' | LC_ALL=C /usr/bin/sort > \"$task_root/mise_configs.txt\"; workspace_config_found=false; while IFS= read -r path; do case \"$path\" in \"$workspace_root/mise.toml\") workspace_config_found=true ;; \"$workspace_root/rust-toolchain.toml\"|\"$task_root/global.toml\"|\"$task_root/system.toml\") ;; *) exit 1 ;; esac; done < \"$task_root/mise_configs.txt\"; [[ \"$workspace_config_found\" == true ]]; mise --no-env --locked --no-hooks run --skip-tools test'"
   tools-producer-19210095:
     name: Tools producer / 19210095
     runs-on: ubuntu-26.04

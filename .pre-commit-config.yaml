@@ -12,3 +12,9 @@ repos:
         language: system
         entry: hadolint
         files: ^Dockerfile$
+      - id: jackin-pins
+        name: jackin-pins
+        language: system
+        entry: scripts/check-jackin-pins.sh
+        pass_filenames: false
+        always_run: true
