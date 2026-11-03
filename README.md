@@ -49,9 +49,11 @@ The egress boundary is the host, the method, and the path (`GET` and `POST` rule
 | Rule | Host | Requests |
 |---|---|---|
 | `crates_io` | `index.crates.io`, `static.crates.io` | `GET`, `HEAD`, `OPTIONS` |
-| `github` | `github.com` | `GET` of `info/refs?service=git-upload-pack`, `POST` of `git-upload-pack` |
+| `github` | `github.com` | `GET` of `/<owner>/<repo>/info/refs?service=git-upload-pack`, `POST` of `/<owner>/<repo>/git-upload-pack` |
 
-The role allows nothing else; OpenShell adds the rule of the Codex provider. No rule allows a push. The G-FAST gate passes with only these hosts, and the policy keeps a host only when a live G-FAST needs it. Review every new host as a new path for content from a prompt injection.
+The role allows nothing else; OpenShell adds the rule of the Codex provider. No rule allows a push. The two `github.com` paths have exactly two segments before `info/refs` and `git-upload-pack`, as every path that the gate uses has. The policy names no repository, because a role user adds git dependencies to jackin over time (jackin will soon add `tailrocks/terminal-components-baseline`) and an allowlist of repositories would break the role at each one.
+
+The open path stays: the sandbox can fetch any public repository and any crate. A process that holds a secret can send it out at a low rate in the owner and repository name of a `github.com` URL, in the path or query of a crates.io request, or in the body of a `git-upload-pack` request to a repository that the attacker controls. Fetched content can also steer the agent. Review every widening of the `github` and `crates_io` rules with both in mind. The G-FAST gate passes with only these hosts, and the policy keeps a host only when a live G-FAST needs it. Review every new host as a new path for content from a prompt injection.
 
 `/dev/ptmx` and `/dev/pts` are writable because the jackin tests and the tool terminals of Codex open pseudo-terminals. The cost: a process in the sandbox can open the slave side of another pseudo-terminal that the sandbox owns, read what the other session writes, and inject keystrokes or terminal escape sequences into it. Only sessions of the same sandbox are affected.
 

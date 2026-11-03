@@ -43,8 +43,8 @@ network_policies:
         protocol: rest
         enforcement: enforce
         rules:
-          - allow: { method: GET, path: "/**/info/refs", query: { service: git-upload-pack } }
-          - allow: { method: POST, path: "/**/git-upload-pack" }
+          - allow: { method: GET, path: "/*/*/info/refs", query: { service: git-upload-pack } }
+          - allow: { method: POST, path: "/*/*/git-upload-pack" }
     binaries:
       - { path: "/usr/local/rustup/toolchains/**" }
       - { path: "/usr/local/share/mise/installs/**" }
