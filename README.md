@@ -9,7 +9,7 @@ Jackin builds the image and creates the sandbox. This repository does not publis
 | File | Purpose |
 |---|---|
 | `jackin.role.toml` | The role manifest (schema 1). It names the `Dockerfile` and the policy. The Docker capability is off. |
-| `Dockerfile` | The final stage starts `FROM construct`. It builds git from a checksum-pinned source archive, installs mise from a checksum-pinned release archive, and installs the locked toolchain. |
+| `Dockerfile` | The final stage starts `FROM construct`. It builds git from a checksum-pinned source archive, installs mise and `rustup-init` from checksum-pinned release files, and installs the locked toolchain. |
 | `toolchain/mise.toml` | The tool pins and the mise settings of the image. The `Dockerfile` copies it to `/etc/mise/config.toml`. |
 | `toolchain/mise.lock`, `toolchain/.mise/` | The lock of `toolchain/mise.toml` for linux arm64 and amd64, with a checksum for every download. The `Dockerfile` copies them next to `/etc/mise/config.toml`. |
 | `toolchain/jackin-pins.toml` | A verbatim copy of the `[tools]` table of `mise.toml` in jackin `feature/openshell-native`. |
@@ -18,7 +18,9 @@ Jackin builds the image and creates the sandbox. This repository does not publis
 
 ## Toolchain
 
-`toolchain/mise.toml` holds the same `[tools]` pins as `mise.toml` in jackin: Rust 1.99.1 with the `mr_boxington = true` option, mr-boxington 1.29.1, cargo-nextest 0.9.151, and the other tools of the jackin gates. The image installs them with `mise install --locked` at build time, so a sandbox starts the gate without a download. The lock gives a URL and a SHA-256 checksum for each download of each tool, with two exceptions: Rust, which rustup downloads over HTTPS and checks against the SHA-256 values of the channel manifest, and `cargo-shear`, which cargo-binstall downloads from its GitHub release. `cargo.binstall_quickinstall = false` keeps cargo-binstall from using third-party binaries.
+`toolchain/mise.toml` holds the same `[tools]` pins as `mise.toml` in jackin: Rust 1.99.1 with the `mr_boxington = true` option, mr-boxington 1.29.1, cargo-nextest 0.9.151, and the other tools of the jackin gates. The image installs them with `mise install --locked` at build time, so a sandbox starts the gate without a download. The lock gives a URL and a SHA-256 checksum for each download of each tool, with one exception: Rust, which rustup downloads over HTTPS and checks against the SHA-256 values of the channel manifest. `cargo-shear` comes from the `github:Boshen/cargo-shear` backend, which the lock pins by the checksum of its release archive for each architecture.
+
+The `Dockerfile` installs rustup itself before mise runs. It takes `rustup-init` 1.29.2 from `static.rust-lang.org` with `ADD --checksum` for each architecture, runs it with `--default-toolchain none`, and sets `auto-self-update` to `disable`. When `RUSTUP_HOME/settings.toml` and `CARGO_HOME/bin` exist, mise skips its own bootstrap, which downloads and runs the unpinned script from `sh.rustup.rs`. mise then installs the pinned Rust toolchain with this rustup.
 
 The tools live in root-owned directories: mise installs in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
 
@@ -26,7 +28,7 @@ The image also replaces `/usr/bin/git` with git 2.56.0, built with https support
 
 The pins follow jackin. `scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` table of `toolchain/mise.toml` differs from `toolchain/jackin-pins.toml`, or when the `Dockerfile` selects a Rust other than the pinned one. The CI task `jackin-pins` (`mise run check:jackin-pins`) fetches `mise.toml` from jackin `feature/openshell-native` and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`. To change a pin, copy the table from jackin into both files in one commit, then run `mise run lock:toolchain` and commit the lock.
 
-`MISE_VERSION` and `GIT_VERSION` in the `Dockerfile` have Renovate rules. Renovate cannot compute the SHA-256 `ARG` values, so a Renovate pull request for either fails the build at the checksum until you replace the hashes by hand.
+`MISE_VERSION`, `RUSTUP_VERSION`, and `GIT_VERSION` in the `Dockerfile` have Renovate rules. Renovate cannot compute the SHA-256 `ARG` values, so a Renovate pull request for any of them fails the build at the checksum until you replace the hashes by hand.
 
 Run the jackin gate in a sandbox of this role:
 

@@ -30,6 +30,17 @@
       "depNameTemplate": "git/git",
       "datasourceTemplate": "github-tags",
       "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+\\.\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG RUSTUP_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "rust-lang/rustup",
+      "datasourceTemplate": "github-tags"
     }
   ]
 }

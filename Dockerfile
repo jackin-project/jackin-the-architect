@@ -5,6 +5,9 @@
 ARG MISE_VERSION=2026.10.25
 ARG MISE_SHA256_ARM64=a7d1e2add53441ff76e7e971e7a3fb15c117741836ce51c026f5fb7eebe7dbcf
 ARG MISE_SHA256_AMD64=199966edaad1b208eb4c72955f1722dafb8fa799f575db720dea05aaa8216546
+ARG RUSTUP_VERSION=1.29.2
+ARG RUSTUP_SHA256_ARM64=a9c168dbea81a84671c6b7a5c1795cb0eb699020110d107ddfca427bd797e697
+ARG RUSTUP_SHA256_AMD64=5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4
 ARG GIT_VERSION=2.56.0
 ARG GIT_SHA256=26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
 
@@ -19,6 +22,18 @@ ARG MISE_SHA256_AMD64
 ADD --checksum=sha256:${MISE_SHA256_AMD64} https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-x64.tar.gz /mise.tar.gz
 
 FROM mise-archive-${TARGETARCH} AS mise-archive
+
+FROM scratch AS rustup-init-arm64
+ARG RUSTUP_VERSION
+ARG RUSTUP_SHA256_ARM64
+ADD --checksum=sha256:${RUSTUP_SHA256_ARM64} --chmod=0755 https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/aarch64-unknown-linux-gnu/rustup-init /rustup-init
+
+FROM scratch AS rustup-init-amd64
+ARG RUSTUP_VERSION
+ARG RUSTUP_SHA256_AMD64
+ADD --checksum=sha256:${RUSTUP_SHA256_AMD64} --chmod=0755 https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init /rustup-init
+
+FROM rustup-init-${TARGETARCH} AS rustup-init
 
 FROM scratch AS git-source
 ARG GIT_VERSION
@@ -72,8 +87,15 @@ COPY --chown=root:root toolchain/mise.toml /etc/mise/config.toml
 COPY --chown=root:root toolchain/mise.lock /etc/mise/mise.lock
 COPY --chown=root:root toolchain/.mise/ /etc/mise/.mise/
 
+RUN --mount=type=bind,from=rustup-init,source=/,target=/rustup \
+    export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/sandbox/.cargo \
+    && mkdir -p "${CARGO_HOME}" \
+    && /rustup/rustup-init -y --no-modify-path --default-toolchain none \
+    && "${CARGO_HOME}/bin/rustup" set auto-self-update disable \
+    && test -f "${RUSTUP_HOME}/settings.toml" \
+    && test -d "${CARGO_HOME}/bin"
+
 RUN export MISE_DATA_DIR=/usr/local/share/mise \
-    && mkdir -p /sandbox/.cargo \
     && mise install --locked python uv \
     && mise install --locked \
     && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
