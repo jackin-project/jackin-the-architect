@@ -22,7 +22,7 @@ Jackin builds the image and creates the sandbox. This repository does not publis
 
 The `Dockerfile` installs rustup itself before mise runs. It takes `rustup-init` 1.29.2 from `static.rust-lang.org` with `ADD --checksum` for each architecture, runs it with `--default-toolchain none`, and sets `auto-self-update` to `disable`. When `RUSTUP_HOME/settings.toml` and `CARGO_HOME/bin` exist, mise skips its own bootstrap, which downloads and runs the unpinned script from `sh.rustup.rs`. mise then installs the pinned Rust toolchain with this rustup.
 
-The tools live in root-owned directories: mise installs in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
+The tools live in root-owned directories: mise installs in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. The build fails when anything in those two directories, other than a symbolic link, is not owned by root or is writable by a group or by others. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
 
 The image also replaces `/usr/bin/git` with git 2.56.0, built with https support. The jackin tests run the first `git` in `/usr/bin`, and jackin refuses a host git older than 2.45.4. The construct image has git 2.43.0.
 
