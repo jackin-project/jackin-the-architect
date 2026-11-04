@@ -10,7 +10,7 @@ The `Dockerfile` ends in a stage that starts `FROM construct`. It adds these par
 
 - git 2.56.0, built from the source archive with https support. It replaces `/usr/bin/git`, because the construct image has git 2.43.0.
 - mise, from a release archive.
-- `rustup-init` 1.29.2 from `static.rust-lang.org`, run with `--default-toolchain none` and with `auto-self-update` disabled.
+- `rustup-init` 1.29.3 from `static.rust-lang.org`, run with `--default-toolchain none` and with `auto-self-update` disabled.
 - The tools of `toolchain/mise.toml`, installed with `mise install --locked` at build time. A sandbox starts the gate without a download.
 - `build-essential`, `cmake`, and `pkg-config` from apt.
 
