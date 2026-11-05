@@ -5,6 +5,9 @@
   ],
   "prHourlyLimit": 0,
   "prConcurrentLimit": 20,
+  "ignorePaths": [
+    ".github/**"
+  ],
   "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
   "customDatasources": {
     "git-source": {
