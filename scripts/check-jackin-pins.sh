@@ -5,6 +5,8 @@ set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 jackin_ref=90acf49722f31c566702c23eea51282beba1cdad
+jackin_branches="feature/openshell-native main"
+jackin_api=https://api.github.com/repos/jackin-project/jackin
 upstream_url=https://raw.githubusercontent.com/jackin-project/jackin/${jackin_ref}/mise.toml
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -33,6 +35,14 @@ if [ "${1-}" = "--upstream" ]; then
     *[!0-9a-f]* | "") printf 'check-jackin-pins: jackin_ref must be a full commit hash\n' >&2; exit 1 ;;
   esac
   [ "${#jackin_ref}" -eq 40 ] || { printf 'check-jackin-pins: jackin_ref must be a full commit hash\n' >&2; exit 1; }
+  reachable=
+  for branch in $jackin_branches; do
+    status=$(curl --fail --silent --show-error --proto '=https' "${jackin_api}/compare/${branch}...${jackin_ref}" | sed -n 's/^  "status": "\([a-z]*\)".*/\1/p') || status=
+    case "$status" in
+      behind | identical) reachable=1 ;;
+    esac
+  done
+  [ -n "$reachable" ] || { printf 'check-jackin-pins: jackin commit %s is not reachable from any of the jackin branches: %s\n' "$jackin_ref" "$jackin_branches" >&2; exit 1; }
   curl --fail --silent --show-error --location --proto '=https' --output upstream.toml "$upstream_url"
   tools_block upstream.toml > upstream
   compare pinned upstream "toolchain/jackin-pins.toml differs from [tools] in jackin commit ${jackin_ref}; copy that block or change jackin_ref"

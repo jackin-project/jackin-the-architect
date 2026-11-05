@@ -37,7 +37,7 @@ The sandbox user can still fill or empty the caches, and can put its own binarie
 3. Run `mise run lock:toolchain`.
 4. Commit the two pin files, the script, and the new lock together.
 
-`scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` tables of the two files differ, or when the `Dockerfile` selects a Rust other than the pinned one. `mise run check:jackin-pins` fetches `mise.toml` from jackin at `jackin_ref` and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`. `jackin_ref` is a full commit hash, because the jackin rewrite has no tag and its branch moves. After the jackin pull request merges, set `jackin_ref` to a commit on `main`.
+`scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` tables of the two files differ, or when the `Dockerfile` selects a Rust other than the pinned one. `mise run check:jackin-pins` first asks the GitHub compare API whether `jackin_ref` is an ancestor of `feature/openshell-native` or `main` in jackin, so a commit that exists only in a fork fails. It then fetches `mise.toml` from jackin at `jackin_ref` and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`. `jackin_ref` is a full commit hash, because the jackin rewrite has no tag and its branch moves. After the jackin pull request merges, set `jackin_ref` to a commit on `main`.
 
 ### Renovate
 
