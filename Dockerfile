@@ -66,8 +66,6 @@ ARG GIT_VERSION
 ARG MISE_VERSION
 ARG TARGETARCH
 
-ENV MISE_DATA_DIR=/usr/local/share/mise
-
 USER 0
 RUN --mount=type=cache,id=the-architect-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=the-architect-apt-lib,target=/var/lib/apt,sharing=locked \
@@ -111,13 +109,10 @@ RUN --mount=type=bind,from=rustup-init,source=/,target=/rustup \
     && test -f "${RUSTUP_HOME}/settings.toml" \
     && test -d "${CARGO_HOME}/bin"
 
-RUN mise install --locked python uv \
-    && mise install --locked \
-    && mise exec -- true \
-    && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
+RUN mise install --system --locked python uv \
+    && mise install --system --locked \
+    && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup \
     && chmod -R go-w /usr/local/cargo /usr/local/rustup /usr/local/share/mise /etc/mise \
-    && rm -f /usr/local/share/mise/command-wrappers/bin.lock \
-    && install -m 0666 -o root -g root /dev/null /usr/local/share/mise/command-wrappers/bin.lock \
     && install -d -o sandbox -g sandbox /sandbox/.cargo /sandbox/.cargo/registry /sandbox/.cargo/git \
     && for entry in registry git .package-cache .package-cache-mutate; do \
         ln -s "/sandbox/.cargo/${entry}" "/usr/local/cargo/${entry}"; \
@@ -128,23 +123,20 @@ RUN --mount=type=bind,source=scripts/verify-toolchain.sh,target=/verify-toolchai
 
 USER 1000
 RUN --mount=type=bind,source=scripts/verify-toolchain.sh,target=/verify-toolchain.sh \
-    for path in /usr/local/cargo/bin/cargo /usr/local/cargo/bin/rustc /usr/local/cargo/bin/rustup /usr/local/cargo/bin/injected /usr/local/cargo/injected /usr/local/share/mise/command-wrappers/bin/cargo /usr/local/share/mise/command-wrappers/bin/injected; do \
+    for path in /usr/local/cargo/bin/cargo /usr/local/cargo/bin/rustc /usr/local/cargo/bin/rustup /usr/local/cargo/bin/injected /usr/local/cargo/injected; do \
         if (: > "${path}") 2>/dev/null; then printf 'writable by the sandbox user: %s\n' "${path}" >&2; exit 1; fi; \
     done \
-    && for path in /usr/local/cargo/bin /usr/local/share/mise/command-wrappers/bin; do \
-        if mv "${path}" "${path}.moved" 2>/dev/null; then printf 'renamable by the sandbox user: %s\n' "${path}" >&2; exit 1; fi; \
-    done \
-    && test "$(mise exec -- printenv CARGO_HOME)" = /usr/local/cargo \
-    && sh /verify-toolchain.sh path
+    && if mv /usr/local/cargo/bin /usr/local/cargo/bin.moved 2>/dev/null; then printf 'renamable by the sandbox user: /usr/local/cargo/bin\n' >&2; exit 1; fi \
+    && env -i HOME=/sandbox PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin sh /verify-toolchain.sh path
 
-RUN probe="$(mktemp -d)" \
-    && mise exec -- cargo init --vcs none --name registry_probe "${probe}" \
-    && mise exec -- cargo generate-lockfile --offline --manifest-path "${probe}/Cargo.toml" \
+RUN sandbox() { env -i HOME=/sandbox PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "$@"; } \
+    && probe="$(mktemp -d)" \
+    && sandbox mise exec -- cargo init --vcs none --name registry_probe "${probe}" \
+    && sandbox mise exec -- cargo generate-lockfile --offline --manifest-path "${probe}/Cargo.toml" \
     && test -f "${probe}/Cargo.lock" \
     && test -e /sandbox/.cargo/.package-cache \
     && touch /usr/local/cargo/registry/probe /usr/local/cargo/git/probe \
-    && rm -rf "${probe}" /usr/local/cargo/registry/probe /usr/local/cargo/git/probe /sandbox/.cargo/.package-cache /sandbox/.cargo/.package-cache-mutate
-
-RUN mise exec -- mbx +1.99.1 --version \
-    && mise exec -- cargo nextest --version \
+    && rm -rf "${probe}" /usr/local/cargo/registry/probe /usr/local/cargo/git/probe /sandbox/.cargo/.package-cache /sandbox/.cargo/.package-cache-mutate \
+    && sandbox mise exec -- mbx +1.99.1 --version \
+    && sandbox mise exec -- cargo nextest --version \
     && rm -rf /sandbox/.cache /sandbox/.local
