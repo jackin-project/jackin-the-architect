@@ -19,7 +19,7 @@ run = "prek run --all-files"
 tools = { gitleaks = "8.30.1", hadolint = "2.15.1", prek = "0.5.10" }
 
 [tasks."check:jackin-pins"]
-description = "Compare the pinned jackin tools with jackin feature/openshell-native"
+description = "Compare the pinned jackin tools with the jackin commit named in scripts/check-jackin-pins.sh"
 run = "scripts/check-jackin-pins.sh --upstream"
 
 [tasks."lock:toolchain"]

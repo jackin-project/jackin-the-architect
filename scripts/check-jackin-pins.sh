@@ -4,7 +4,8 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-upstream_url=https://raw.githubusercontent.com/jackin-project/jackin/feature/openshell-native/mise.toml
+jackin_ref=90acf49722f31c566702c23eea51282beba1cdad
+upstream_url=https://raw.githubusercontent.com/jackin-project/jackin/${jackin_ref}/mise.toml
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work"
@@ -28,9 +29,13 @@ compare() {
 tools_block "$root/toolchain/jackin-pins.toml" > "$work/pinned"
 
 if [ "${1-}" = "--upstream" ]; then
+  case "$jackin_ref" in
+    *[!0-9a-f]* | "") printf 'check-jackin-pins: jackin_ref must be a full commit hash\n' >&2; exit 1 ;;
+  esac
+  [ "${#jackin_ref}" -eq 40 ] || { printf 'check-jackin-pins: jackin_ref must be a full commit hash\n' >&2; exit 1; }
   curl --fail --silent --show-error --location --proto '=https' --output upstream.toml "$upstream_url"
   tools_block upstream.toml > upstream
-  compare pinned upstream "toolchain/jackin-pins.toml differs from [tools] in jackin feature/openshell-native; copy that block"
+  compare pinned upstream "toolchain/jackin-pins.toml differs from [tools] in jackin commit ${jackin_ref}; copy that block or change jackin_ref"
   exit 0
 fi
 

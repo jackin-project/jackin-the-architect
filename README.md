@@ -33,10 +33,11 @@ The sandbox user can still fill or empty the caches, and can put its own binarie
 `toolchain/jackin-pins.toml` is a verbatim copy of the `[tools]` table of `mise.toml` in jackin `feature/openshell-native`. To change a pin:
 
 1. Copy the table from jackin into `toolchain/jackin-pins.toml` and `toolchain/mise.toml`.
-2. Run `mise run lock:toolchain`.
-3. Commit the two pin files and the new lock together.
+2. Set `jackin_ref` in `scripts/check-jackin-pins.sh` to the jackin commit you copied from.
+3. Run `mise run lock:toolchain`.
+4. Commit the two pin files, the script, and the new lock together.
 
-`scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` tables of the two files differ, or when the `Dockerfile` selects a Rust other than the pinned one. `mise run check:jackin-pins` fetches `mise.toml` from jackin and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`.
+`scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` tables of the two files differ, or when the `Dockerfile` selects a Rust other than the pinned one. `mise run check:jackin-pins` fetches `mise.toml` from jackin at `jackin_ref` and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`. `jackin_ref` is a full commit hash, because the jackin rewrite has no tag and its branch moves. After the jackin pull request merges, set `jackin_ref` to a commit on `main`.
 
 ### Renovate
 
