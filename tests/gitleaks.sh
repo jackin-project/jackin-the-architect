@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-root=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
+root=$(CDPATH='' cd "$(dirname "$0")/.." && pwd)
 prek_version=$(sed -n 's/^prek = "\([^"]*\)"/\1/p' "$root/mise.toml")
 gitleaks_version=$(sed -n 's/^gitleaks = "\([^"]*\)"/\1/p' "$root/mise.toml")
 prek_bin=$(mise -C / which prek --tool "prek@$prek_version")
@@ -35,11 +35,22 @@ new_repo clean
 printf 'clean\n' >"$repo/clean.txt"
 git -C "$repo" add clean.txt
 run_pass staged_clean_file
+aws_access_key_id=$(printf '%s%s' 'AKIA' 'Z7VRSQ3ABCDEFGHI')
+aws_secret_access_key=$(printf '%s%s' 'wJalrXUtnFEMI/K7MDENG/' 'bPxRfiCYzZ7K3ABcdE')
 printf '.env\n' >"$repo/.gitignore"
-printf 'ghp_%s%s\n' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' 'abcdefghijklmnopqrstuvwxyz' >"$repo/.env"
+printf 'aws_access_key_id = "%s"\naws_secret_access_key = "%s"\n' "$aws_access_key_id" "$aws_secret_access_key" >"$repo/.env"
 git -C "$repo" add .gitignore
 run_pass ignored_untracked_env
-echo "ok   staged_clean_file_and_ignored_env"
+git -C "$repo" add -f -- .env
+if (cd "$repo" && "$prek_bin" run gitleaks >"$scratch/run.out" 2>&1); then
+    echo "FAIL force_added_env_secret_passed"
+    exit 1
+fi
+if grep -Fq "$aws_access_key_id" "$scratch/run.out" || grep -Fq "$aws_secret_access_key" "$scratch/run.out"; then
+    echo "FAIL gitleaks_output_disclosed_value"
+    exit 1
+fi
+echo "ok   staged_clean_file_ignored_env_and_force_added_env_secret_rejected"
 
 new_repo option
 printf 'clean\n' >"$repo/clean.txt"
