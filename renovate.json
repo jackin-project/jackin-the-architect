@@ -6,6 +6,15 @@
   "prHourlyLimit": 0,
   "prConcurrentLimit": 20,
   "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
+  "customDatasources": {
+    "git-source": {
+      "defaultRegistryUrlTemplate": "https://mirrors.edge.kernel.org/pub/software/scm/git/sha256sums.asc",
+      "format": "plain",
+      "transformTemplates": [
+        "{\"releases\": releases[$contains(version, /^[a-f0-9]{64}\\s+git-\\d+\\.\\d+\\.\\d+\\.tar\\.xz$/)].{\"version\": $match(version, /git-(\\d+\\.\\d+\\.\\d+)\\.tar\\.xz$/).groups[0], \"digest\": $substring(version, 0, 64)}}"
+      ]
+    }
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -13,11 +22,10 @@
         "/^Dockerfile$/"
       ],
       "matchStrings": [
-        "ARG MISE_VERSION=(?<currentValue>\\S+)"
+        "ARG MISE_VERSION=(?<currentValue>\\S+)\\nARG MISE_SHASUMS256=(?<currentDigest>[a-f0-9]{64})\\n"
       ],
       "depNameTemplate": "jdx/mise",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
+      "datasourceTemplate": "github-release-attachments"
     },
     {
       "customType": "regex",
@@ -25,11 +33,10 @@
         "/^Dockerfile$/"
       ],
       "matchStrings": [
-        "ARG GIT_VERSION=(?<currentValue>\\S+)"
+        "ARG GIT_VERSION=(?<currentValue>\\S+)\\nARG GIT_SHA256=(?<currentDigest>[a-f0-9]{64})\\n"
       ],
-      "depNameTemplate": "git/git",
-      "datasourceTemplate": "github-tags",
-      "extractVersionTemplate": "^v(?<version>\\d+\\.\\d+\\.\\d+)$"
+      "depNameTemplate": "git",
+      "datasourceTemplate": "custom.git-source"
     },
     {
       "customType": "regex",

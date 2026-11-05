@@ -2,24 +2,26 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-ARG MISE_VERSION=2026.11.0
-ARG MISE_SHA256_ARM64=92f90c094b6eab2dcdbc46f2b977a78bba82a9311fe0c592c17e403a8d0ec621
-ARG MISE_SHA256_AMD64=cf48795ee2cb3f8822ba0ed4b45d729b791fe0c984baf6080ebb7b0c1ba23119
+ARG MISE_VERSION=v2026.11.0
+ARG MISE_SHASUMS256=f664a2badead97a27b9555e71d14a9660bedb7f8ff311c0ebcb4f9ca418cc1fe
 ARG RUSTUP_VERSION=1.29.3
 ARG RUSTUP_SHA256_ARM64=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282
 ARG RUSTUP_SHA256_AMD64=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
 ARG GIT_VERSION=2.56.0
 ARG GIT_SHA256=26c56c296b38c0695b26fa95f475f1d01704d2d38e73465ca30b0b2f5dc789d3
 
+FROM scratch AS mise-shasums
+ARG MISE_VERSION
+ARG MISE_SHASUMS256
+ADD --checksum=sha256:${MISE_SHASUMS256} https://github.com/jdx/mise/releases/download/${MISE_VERSION}/SHASUMS256.txt /SHASUMS256.txt
+
 FROM scratch AS mise-archive-arm64
 ARG MISE_VERSION
-ARG MISE_SHA256_ARM64
-ADD --checksum=sha256:${MISE_SHA256_ARM64} https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-arm64.tar.gz /mise.tar.gz
+ADD https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-arm64.tar.gz /mise.tar.gz
 
 FROM scratch AS mise-archive-amd64
 ARG MISE_VERSION
-ARG MISE_SHA256_AMD64
-ADD --checksum=sha256:${MISE_SHA256_AMD64} https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/mise-v${MISE_VERSION}-linux-x64.tar.gz /mise.tar.gz
+ADD https://github.com/jdx/mise/releases/download/${MISE_VERSION}/mise-${MISE_VERSION}-linux-x64.tar.gz /mise.tar.gz
 
 FROM mise-archive-${TARGETARCH} AS mise-archive
 
@@ -61,6 +63,8 @@ RUN --mount=type=bind,from=git-source,source=/,target=/source \
 FROM construct
 
 ARG GIT_VERSION
+ARG MISE_VERSION
+ARG TARGETARCH
 
 USER 0
 RUN --mount=type=cache,id=the-architect-apt-cache,target=/var/cache/apt,sharing=locked \
@@ -71,8 +75,18 @@ RUN --mount=type=cache,id=the-architect-apt-cache,target=/var/cache/apt,sharing=
         cmake \
         pkg-config
 
-RUN --mount=type=bind,from=mise-archive,source=/,target=/archive \
-    tar -xzf /archive/mise.tar.gz --no-same-owner --strip-components=2 -C /usr/local/bin mise/bin/mise \
+RUN --mount=type=bind,from=mise-shasums,source=/,target=/shasums \
+    --mount=type=bind,from=mise-archive,source=/,target=/archive \
+    case "${TARGETARCH}" in \
+        arm64) asset="mise-${MISE_VERSION}-linux-arm64.tar.gz" ;; \
+        amd64) asset="mise-${MISE_VERSION}-linux-x64.tar.gz" ;; \
+        *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && awk -v name="./${asset}" '$2 == name { print $1 "  /archive/mise.tar.gz" }' /shasums/SHASUMS256.txt > /tmp/mise.sha256 \
+    && test "$(wc -l < /tmp/mise.sha256)" -eq 1 \
+    && sha256sum -c /tmp/mise.sha256 \
+    && rm /tmp/mise.sha256 \
+    && tar -xzf /archive/mise.tar.gz --no-same-owner --strip-components=2 -C /usr/local/bin mise/bin/mise \
     && mise --version
 
 RUN rm -rf /usr/lib/git-core

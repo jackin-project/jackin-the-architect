@@ -9,7 +9,7 @@ Jackin builds the image and creates the sandbox. This repository does not publis
 The `Dockerfile` ends in a stage that starts `FROM construct`. It adds these parts, all with a pinned version and a checksum:
 
 - git 2.56.0, built from the source archive with https support. It replaces `/usr/bin/git`, because the construct image has git 2.43.0.
-- mise, from a release archive.
+- mise, from a release archive. The build checks the archive against the `SHASUMS256.txt` of the release, and checks that file against a pinned digest.
 - `rustup-init` 1.29.3 from `static.rust-lang.org`, run with `--default-toolchain none` and with `auto-self-update` disabled.
 - The tools of `toolchain/mise.toml`, installed with `mise install --locked` at build time. A sandbox starts the gate without a download.
 - `build-essential`, `cmake`, and `pkg-config` from apt.
@@ -38,7 +38,17 @@ The sandbox user can still fill or empty the caches, and can put its own binarie
 
 `scripts/check-jackin-pins.sh` runs in `mise run test`. It fails when the `[tools]` tables of the two files differ, or when the `Dockerfile` selects a Rust other than the pinned one. `mise run check:jackin-pins` fetches `mise.toml` from jackin and fails when its `[tools]` table differs from `toolchain/jackin-pins.toml`.
 
-`MISE_VERSION`, `RUSTUP_VERSION`, and `GIT_VERSION` in the `Dockerfile` have Renovate rules. Renovate cannot compute the SHA-256 `ARG` values. A Renovate pull request for any of them fails the build at the checksum until you replace the hashes by hand.
+### Renovate
+
+`renovate.json` has a rule for each of `MISE_VERSION`, `GIT_VERSION`, and `RUSTUP_VERSION` in the `Dockerfile`. Two of them update the digest with the version, because a datasource supplies it:
+
+| Argument | Datasource | Digest |
+|---|---|---|
+| `MISE_VERSION`, `MISE_SHASUMS256` | `github-release-attachments` for `jdx/mise` | Renovate computes the digest of the `SHASUMS256.txt` asset of the new release. One digest covers both architectures, so the two edits cannot overlap. |
+| `GIT_VERSION`, `GIT_SHA256` | custom datasource `git-source`, the `sha256sums.asc` file at kernel.org | The digest of `git-<version>.tar.xz` from that file. |
+| `RUSTUP_VERSION` | `github-tags` for `rust-lang/rustup` | None. `static.rust-lang.org` publishes one checksum file per version and architecture, and no datasource lists them. |
+
+A Renovate pull request for `RUSTUP_VERSION` changes only the version, so the build fails at the `ADD --checksum` of `rustup-init` until you replace `RUSTUP_SHA256_ARM64` and `RUSTUP_SHA256_AMD64` by hand with the contents of `rustup-init.sha256` from `static.rust-lang.org/rustup/archive/<version>/<triple>/`. The Renovate digests come from the same hosts as the files, so review each pull request as a change to what the build downloads.
 
 ## Egress policy
 
