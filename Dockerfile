@@ -99,10 +99,10 @@ RUN export MISE_DATA_DIR=/usr/local/share/mise \
     && mise install --locked python uv \
     && mise install --locked \
     && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
-    && chmod -R go-w /usr/local/rustup /usr/local/share/mise \
+    && chmod -R go-w /usr/local/rustup /usr/local/share/mise /etc/mise \
     && chown -R sandbox:sandbox /sandbox/.cargo
 
-RUN offenders="$(find /usr/local/rustup /usr/local/share/mise \( ! -user root -o -perm /022 \) ! -type l -print)" \
+RUN offenders="$(find /usr/local/rustup /usr/local/share/mise /etc/mise /usr/local/bin/mise /usr/bin/git /usr/lib/git-core \( ! -user root -o -perm /022 \) ! -type l -print)" \
     && if [ -n "${offenders}" ]; then printf '%s\n' "${offenders}" >&2; exit 1; fi
 
 USER 1000

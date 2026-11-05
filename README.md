@@ -22,7 +22,7 @@ Jackin adds Codex and `jackin-start` when it derives the final image (decision D
 
 The lock covers linux arm64 and amd64. It gives a URL and a SHA-256 checksum for each download of each tool. Rust is the exception: rustup downloads it and checks it against the SHA-256 values of the channel manifest. `cargo-shear` comes from the `github:Boshen/cargo-shear` backend, which the lock pins by the checksum of its release archive.
 
-The tools live in root-owned directories: mise in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. The build fails when anything in those directories, other than a symbolic link, is not owned by root or is writable by a group or by others. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
+The tools live in root-owned directories: mise in `/usr/local/share/mise` and the Rust toolchains in `/usr/local/rustup`. The build fails when anything in those directories, in `/etc/mise`, in `/usr/lib/git-core`, or at `/usr/local/bin/mise` or `/usr/bin/git`, other than a symbolic link, is not owned by root or is writable by a group or by others. Only `CARGO_HOME` (`/sandbox/.cargo`) and the caches are writable. `CARGO_HOME/bin` holds the rustup proxies, so code in the sandbox can replace `cargo` and `rustc` there. It cannot change the toolchains themselves.
 
 ### Pins
 
