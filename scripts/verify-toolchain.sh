@@ -7,6 +7,7 @@ mode=${1-}
 root=${VERIFY_ROOT-}
 trusted=${VERIFY_USER:-root}
 cargo_bin=$root/usr/local/cargo/bin
+mise_lock=$root/usr/local/share/mise/command-wrappers/bin.lock
 set -- "$root/usr/local/cargo" "$root/usr/local/rustup" "$root/usr/local/share/mise" "$root/etc/mise" "$root/usr/local/bin/mise" "$root/usr/bin/git" "$root/usr/lib/git-core"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -42,8 +43,6 @@ allowed_link() {
   case "$1" in
     "$root"/usr/local/cargo/registry | "$root"/usr/local/cargo/git | "$root"/usr/local/cargo/.package-cache | "$root"/usr/local/cargo/.package-cache-mutate)
       [ "$2" = "/sandbox/.cargo/${1##*/}" ] ;;
-    "$root"/usr/local/share/mise/command-wrappers/bin.lock)
-      [ "$2" = /tmp/mise-command-wrappers.lock ] ;;
     *) return 1 ;;
   esac
 }
@@ -60,8 +59,9 @@ inside_trees() {
 }
 
 check_trees() {
-  offenders=$(find "$@" \( ! -user "$trusted" -o -perm -020 -o -perm -002 \) ! -type l -print)
+  offenders=$(find "$@" ! -path "$mise_lock" \( ! -user "$trusted" -o -perm -020 -o -perm -002 \) ! -type l -print)
   [ -z "$offenders" ] || { printf '%s\n' "$offenders" >&2; fail "owned by another user or writable by a group or by others"; }
+  [ -n "$(find "$mise_lock" -prune -type f -user "$trusted" -perm 0666 -print 2>/dev/null)" ] || fail "$mise_lock is not a regular file owned by $trusted with mode 0666"
 
   find "$@" -type l -print > "$work/links"
   : > "$work/escapes"

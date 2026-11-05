@@ -28,12 +28,13 @@ The tools live in root-owned directories: mise in `/usr/local/share/mise`, the R
 
 `mr_boxington = true` adds a second directory. Under `mise exec`, mise puts `$MISE_DATA_DIR/command-wrappers/bin` at the front of `PATH` and runs `cargo` through the wrapper there (`apply_command_wrapper_paths` in `src/toolset/toolset_paths.rs` and `COMMAND_WRAPPERS` in `crates/mise-util/src/dirs.rs`, mise 2026.11.0). The build runs `mise exec -- true` as root, which creates that directory (`ensure_command_wrapper_shims` in `src/shims.rs`), before it removes group and other write permission. If the data directory were the default one, the sandbox user could replace `cargo` there.
 
-A read-only data directory has one runtime cost. Each `mise exec` opens `command-wrappers/bin.lock` for writing (`write_bootstrap_shims` in `src/shims.rs` and `LockFile::at` in `crates/mise-util/src/lock_file.rs`), and `mise exec` fails with "Permission denied" when that file is read-only. `bin.lock` is therefore a symbolic link to `/tmp/mise-command-wrappers.lock`, which the sandbox user creates on first use. Everything else that mise writes goes under `$HOME` (`/sandbox`): the cache in `~/.cache/mise` and the state in `~/.local/state/mise`. The build proves this by running `mbx`, `cargo-nextest`, and `cargo generate-lockfile --offline` as the sandbox user against the read-only trees.
+A read-only data directory has one runtime cost. Each `mise exec` opens `command-wrappers/bin.lock` for writing (`write_bootstrap_shims` in `src/shims.rs` and `LockFile::at` in `crates/mise-util/src/lock_file.rs`), and `mise exec` fails with "Permission denied" when that file is read-only. `bin.lock` is therefore an empty regular file that root owns with mode 0666 inside the root-owned `command-wrappers` directory. The sandbox user can open and lock it (fslock opens it with `O_RDWR|O_CREAT` and takes `flock`, and unlocking truncates the same file), but cannot replace it, rename it, or point it elsewhere. Everything else that mise writes goes under `$HOME` (`/sandbox`): the cache in `~/.cache/mise` and the state in `~/.local/state/mise`. The build proves this by running `mbx`, `cargo-nextest`, and `cargo generate-lockfile --offline` as the sandbox user against the read-only trees.
 
 The build checks these properties with `scripts/verify-toolchain.sh`:
 
 - As root, nothing in `/usr/local/cargo`, `/usr/local/rustup`, `/usr/local/share/mise`, `/etc/mise`, `/usr/lib/git-core`, `/usr/local/bin/mise`, or `/usr/bin/git`, other than a symbolic link, is owned by another user or writable by a group or by others.
-- As root, the only symbolic links that resolve outside those trees are `/usr/local/cargo/{registry,git,.package-cache,.package-cache-mutate}` to `/sandbox/.cargo/<name>` and `bin.lock` to `/tmp/mise-command-wrappers.lock`.
+- As root, the only symbolic links that resolve outside those trees are `/usr/local/cargo/{registry,git,.package-cache,.package-cache-mutate}` to `/sandbox/.cargo/<name>`.
+- As root, `command-wrappers/bin.lock` is the only world-writable path in those trees. It must be a regular file, not a symbolic link, owned by root, with mode exactly 0666.
 - As the sandbox user, it cannot write to a proxy or a wrapper, add a file to `/usr/local/cargo`, or rename `/usr/local/cargo/bin` or the wrapper directory.
 - As the sandbox user, every `PATH` entry that `mise exec` puts ahead of `/usr/local/cargo/bin` is an absolute directory, and it and all its parents are owned by root and closed to group and other writes. `cargo` and `rustc` under `mise exec` resolve to files with the same properties.
 
@@ -46,7 +47,7 @@ The promise is that the sandbox user cannot replace the root-owned tools. It can
 - `~/.config/mise/config.toml` and any `mise.toml` it trusts. `[env] _.path` puts a directory ahead of the root-owned ones under `mise exec`, and a command wrapper that the file declares replaces the `cargo` wrapper.
 - `MISE_DATA_DIR`. A process that unsets or changes it makes mise use another data directory.
 - `/sandbox/.cargo/config.toml` and the `.cargo/config.toml` of any parent directory of the workspace. Cargo reads them under the root-owned proxy, and they can set `build.rustc-wrapper` and `target.<triple>.runner`, which run the sandbox user's program in place of `rustc` and in place of a test binary.
-- The caches. It can fill or empty `/sandbox/.cargo` and the lock file in `/tmp`.
+- The caches. It can fill or empty `/sandbox/.cargo`. It can hold the `flock` on `bin.lock`, which makes `mise exec` wait.
 - A plain shell. The image `PATH` is the Ubuntu default, and a profile or the user can add `~/.local/bin` or `~/bin` ahead of it. The rustup proxies apply only under `mise exec`.
 
 ### Plain shell

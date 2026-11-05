@@ -115,8 +115,9 @@ RUN mise install --locked python uv \
     && mise install --locked \
     && mise exec -- true \
     && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
-    && ln -sfn /tmp/mise-command-wrappers.lock /usr/local/share/mise/command-wrappers/bin.lock \
     && chmod -R go-w /usr/local/cargo /usr/local/rustup /usr/local/share/mise /etc/mise \
+    && rm -f /usr/local/share/mise/command-wrappers/bin.lock \
+    && install -m 0666 -o root -g root /dev/null /usr/local/share/mise/command-wrappers/bin.lock \
     && install -d -o sandbox -g sandbox /sandbox/.cargo /sandbox/.cargo/registry /sandbox/.cargo/git \
     && for entry in registry git .package-cache .package-cache-mutate; do \
         ln -s "/sandbox/.cargo/${entry}" "/usr/local/cargo/${entry}"; \
@@ -146,4 +147,4 @@ RUN probe="$(mktemp -d)" \
 
 RUN mise exec -- mbx +1.99.1 --version \
     && mise exec -- cargo nextest --version \
-    && rm -rf /sandbox/.cache /sandbox/.local /tmp/mise-command-wrappers.lock
+    && rm -rf /sandbox/.cache /sandbox/.local
