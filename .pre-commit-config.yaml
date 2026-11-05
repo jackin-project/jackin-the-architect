@@ -4,9 +4,13 @@ repos:
       - id: gitleaks
         name: gitleaks
         language: system
-        entry: gitleaks dir --redact --no-banner .
+        entry: sh -c 'for file; do gitleaks dir --redact --no-banner -- "$file" || exit 1; done' gitleaks
+      - id: gitleaks-cases
+        name: staged gitleaks cases
+        language: system
+        entry: sh tests/gitleaks.sh
+        files: ^(.pre-commit-config.yaml|tests/gitleaks\.sh)$
         pass_filenames: false
-        always_run: true
       - id: hadolint
         name: hadolint
         language: system
