@@ -32,4 +32,4 @@ zizmor = "1.32.0"
 [settings]
 lockfile = true
 rust.rustup_home = "/usr/local/rustup"
-rust.cargo_home = "/sandbox/.cargo"
+rust.cargo_home = "/usr/local/cargo"

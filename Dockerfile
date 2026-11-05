@@ -88,7 +88,7 @@ COPY --chown=root:root toolchain/mise.lock /etc/mise/mise.lock
 COPY --chown=root:root toolchain/.mise/ /etc/mise/.mise/
 
 RUN --mount=type=bind,from=rustup-init,source=/,target=/rustup \
-    export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/sandbox/.cargo \
+    export RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
     && mkdir -p "${CARGO_HOME}" \
     && /rustup/rustup-init -y --no-modify-path --default-toolchain none \
     && "${CARGO_HOME}/bin/rustup" set auto-self-update disable \
@@ -99,13 +99,31 @@ RUN export MISE_DATA_DIR=/usr/local/share/mise \
     && mise install --locked python uv \
     && mise install --locked \
     && rm -rf /sandbox/.cache /sandbox/.local /sandbox/.rustup /usr/local/share/mise/downloads \
-    && chmod -R go-w /usr/local/rustup /usr/local/share/mise /etc/mise \
-    && chown -R sandbox:sandbox /sandbox/.cargo
+    && chmod -R go-w /usr/local/cargo /usr/local/rustup /usr/local/share/mise /etc/mise \
+    && install -d -o sandbox -g sandbox /sandbox/.cargo /sandbox/.cargo/registry /sandbox/.cargo/git \
+    && for entry in registry git .package-cache .package-cache-mutate; do \
+        ln -s "/sandbox/.cargo/${entry}" "/usr/local/cargo/${entry}"; \
+    done
 
-RUN offenders="$(find /usr/local/rustup /usr/local/share/mise /etc/mise /usr/local/bin/mise /usr/bin/git /usr/lib/git-core \( ! -user root -o -perm /022 \) ! -type l -print)" \
+RUN offenders="$(find /usr/local/cargo /usr/local/rustup /usr/local/share/mise /etc/mise /usr/local/bin/mise /usr/bin/git /usr/lib/git-core \( ! -user root -o -perm /022 \) ! -type l -print)" \
     && if [ -n "${offenders}" ]; then printf '%s\n' "${offenders}" >&2; exit 1; fi
 
 USER 1000
+RUN for path in /usr/local/cargo/bin/cargo /usr/local/cargo/bin/rustc /usr/local/cargo/bin/rustup /usr/local/cargo/bin/injected /usr/local/cargo/injected; do \
+        if (: > "${path}") 2>/dev/null; then printf 'writable by the sandbox user: %s\n' "${path}" >&2; exit 1; fi; \
+    done \
+    && if mv /usr/local/cargo/bin /usr/local/cargo/bin.moved 2>/dev/null; then echo "renamable by the sandbox user: /usr/local/cargo/bin" >&2; exit 1; fi \
+    && test "$(mise exec -- printenv CARGO_HOME)" = /usr/local/cargo \
+    && case "$(mise exec -- printenv PATH)" in /usr/local/cargo/bin:*) ;; *) echo "/usr/local/cargo/bin is not first on PATH" >&2; exit 1 ;; esac
+
+RUN probe="$(mktemp -d)" \
+    && mise exec -- cargo init --vcs none --name registry_probe "${probe}" \
+    && mise exec -- cargo generate-lockfile --offline --manifest-path "${probe}/Cargo.toml" \
+    && test -f "${probe}/Cargo.lock" \
+    && test -e /sandbox/.cargo/.package-cache \
+    && touch /usr/local/cargo/registry/probe /usr/local/cargo/git/probe \
+    && rm -rf "${probe}" /usr/local/cargo/registry/probe /usr/local/cargo/git/probe /sandbox/.cargo/.package-cache /sandbox/.cargo/.package-cache-mutate
+
 RUN mise exec -- mbx +1.99.1 --version \
     && mise exec -- cargo nextest --version \
     && rm -rf /sandbox/.cache /sandbox/.local
