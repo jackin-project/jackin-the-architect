@@ -22,11 +22,36 @@ Jackin adds Codex and `jackin-start` when it derives the final image (decision D
 
 The lock covers linux arm64 and amd64. It gives a URL and a SHA-256 checksum for each download of each tool. Rust is the exception: rustup downloads it and checks it against the SHA-256 values of the channel manifest. `cargo-shear` comes from the `github:Boshen/cargo-shear` backend, which the lock pins by the checksum of its release archive.
 
-The tools live in root-owned directories: mise in `/usr/local/share/mise`, the Rust toolchains in `/usr/local/rustup`, and the rustup proxies (`cargo`, `rustc`, and the others) in `/usr/local/cargo/bin`. The build fails when anything in those directories, in `/etc/mise`, in `/usr/lib/git-core`, or at `/usr/local/bin/mise` or `/usr/bin/git`, other than a symbolic link, is not owned by root or is writable by a group or by others. It then runs as the sandbox user and fails when that user can write to a proxy, add a file to `/usr/local/cargo`, or rename `/usr/local/cargo/bin`.
+The tools live in root-owned directories: mise in `/usr/local/share/mise`, the Rust toolchains in `/usr/local/rustup`, and the rustup proxies (`cargo`, `rustc`, and the others) in `/usr/local/cargo/bin`. The image sets `ENV MISE_DATA_DIR=/usr/local/share/mise`, so mise reads its installs from there instead of from `/sandbox/.local/share/mise`, which the sandbox user owns.
 
-`CARGO_HOME` is `/usr/local/cargo` (`rust.cargo_home` in `toolchain/mise.toml`). mise puts `$CARGO_HOME/bin` first on `PATH` and sets `CARGO_HOME` for `mise exec` (`list_bin_paths` and `exec_env` of the rust plugin in mise 2026.11.0), so the proxy directory cannot be separate from `CARGO_HOME`. Cargo needs a writable registry cache, so `/usr/local/cargo/registry`, `git`, `.package-cache`, and `.package-cache-mutate` are symbolic links into `/sandbox/.cargo`, which the sandbox user owns. The policy makes `/usr` read-only, so a symbolic link is the only way to put a writable cache under a root-owned `CARGO_HOME`. Build outputs go to the target directory of the workspace. Cargo ignores the `.global-cache` database it cannot create. `cargo install` into `CARGO_HOME/bin` fails by design.
+`CARGO_HOME` is `/usr/local/cargo` (`rust.cargo_home` in `toolchain/mise.toml`). mise puts `$CARGO_HOME/bin` first among the Rust paths and sets `CARGO_HOME` for `mise exec` (`list_bin_paths` and `exec_env` of the rust plugin in mise 2026.11.0), so the proxy directory cannot be separate from `CARGO_HOME`. Cargo needs a writable registry cache, so `/usr/local/cargo/registry`, `git`, `.package-cache`, and `.package-cache-mutate` are symbolic links into `/sandbox/.cargo`, which the sandbox user owns. The policy makes `/usr` read-only, so a symbolic link is the only way to put a writable cache under a root-owned `CARGO_HOME`. Build outputs go to the target directory of the workspace. Cargo ignores the `.global-cache` database it cannot create. `cargo install` into `CARGO_HOME/bin` fails by design.
 
-The sandbox user can still fill or empty the caches, and can put its own binaries earlier on its own `PATH`. It cannot replace the proxies or the toolchains that `mise exec` selects.
+`mr_boxington = true` adds a second directory. Under `mise exec`, mise puts `$MISE_DATA_DIR/command-wrappers/bin` at the front of `PATH` and runs `cargo` through the wrapper there (`apply_command_wrapper_paths` in `src/toolset/toolset_paths.rs` and `COMMAND_WRAPPERS` in `crates/mise-util/src/dirs.rs`, mise 2026.11.0). The build runs `mise exec -- true` as root, which creates that directory (`ensure_command_wrapper_shims` in `src/shims.rs`), before it removes group and other write permission. If the data directory were the default one, the sandbox user could replace `cargo` there.
+
+A read-only data directory has one runtime cost. Each `mise exec` opens `command-wrappers/bin.lock` for writing (`write_bootstrap_shims` in `src/shims.rs` and `LockFile::at` in `crates/mise-util/src/lock_file.rs`), and `mise exec` fails with "Permission denied" when that file is read-only. `bin.lock` is therefore a symbolic link to `/tmp/mise-command-wrappers.lock`, which the sandbox user creates on first use. Everything else that mise writes goes under `$HOME` (`/sandbox`): the cache in `~/.cache/mise` and the state in `~/.local/state/mise`. The build proves this by running `mbx`, `cargo-nextest`, and `cargo generate-lockfile --offline` as the sandbox user against the read-only trees.
+
+The build checks these properties with `scripts/verify-toolchain.sh`:
+
+- As root, nothing in `/usr/local/cargo`, `/usr/local/rustup`, `/usr/local/share/mise`, `/etc/mise`, `/usr/lib/git-core`, `/usr/local/bin/mise`, or `/usr/bin/git`, other than a symbolic link, is owned by another user or writable by a group or by others.
+- As root, the only symbolic links that resolve outside those trees are `/usr/local/cargo/{registry,git,.package-cache,.package-cache-mutate}` to `/sandbox/.cargo/<name>` and `bin.lock` to `/tmp/mise-command-wrappers.lock`.
+- As the sandbox user, it cannot write to a proxy or a wrapper, add a file to `/usr/local/cargo`, or rename `/usr/local/cargo/bin` or the wrapper directory.
+- As the sandbox user, every `PATH` entry that `mise exec` puts ahead of `/usr/local/cargo/bin` is an absolute directory, and it and all its parents are owned by root and closed to group and other writes. `cargo` and `rustc` under `mise exec` resolve to files with the same properties.
+
+Any failed check fails the build.
+
+### What the sandbox user can still shadow
+
+The promise is that the sandbox user cannot replace the root-owned tools. It can always run its own binaries for itself. These routes remain, and each affects only commands that the sandbox user starts:
+
+- `~/.config/mise/config.toml` and any `mise.toml` it trusts. `[env] _.path` puts a directory ahead of the root-owned ones under `mise exec`, and a command wrapper that the file declares replaces the `cargo` wrapper.
+- `MISE_DATA_DIR`. A process that unsets or changes it makes mise use another data directory.
+- `/sandbox/.cargo/config.toml` and the `.cargo/config.toml` of any parent directory of the workspace. Cargo reads them under the root-owned proxy, and they can set `build.rustc-wrapper` and `target.<triple>.runner`, which run the sandbox user's program in place of `rustc` and in place of a test binary.
+- The caches. It can fill or empty `/sandbox/.cargo` and the lock file in `/tmp`.
+- A plain shell. The image `PATH` is the Ubuntu default, and a profile or the user can add `~/.local/bin` or `~/bin` ahead of it. The rustup proxies apply only under `mise exec`.
+
+### Plain shell
+
+The image `ENV` sets `MISE_DATA_DIR` and nothing else. It sets neither `PATH`, `CARGO_HOME`, nor `RUSTUP_HOME`, so a plain shell finds no `cargo`. This is deliberate. The jackin rules run every Rust command through `mise exec -- mbx`, which uses the wrapper and the pinned toolchain. A `cargo` on the plain `PATH` would skip `mr-boxington`, and without `RUSTUP_HOME` the proxy would look for toolchains in `~/.rustup` and try to download one, which the policy denies. A sandbox process that does not inherit the image `ENV` has no `MISE_DATA_DIR`, finds none of the tools, and fails instead of falling back to a writable copy.
 
 ### Pins
 
