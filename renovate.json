@@ -6,7 +6,10 @@
   "prHourlyLimit": 0,
   "prConcurrentLimit": 20,
   "ignorePaths": [
-    ".github/**"
+    ".github/**",
+    "toolchain/mise.toml",
+    ".mise/locks/**",
+    "toolchain/.mise/locks/**"
   ],
   "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
   "customDatasources": {
