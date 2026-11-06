@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+version: 1
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /bin
+    - /sbin
+    - /usr
+    - /lib
+    - /etc
+    - /proc
+    - /dev/urandom
+    - /dev/zero
+    - /var/log
+  read_write:
+    - /tmp
+    - /dev/null
+    - /dev/shm
+    - /dev/ptmx
+    - /dev/pts
+    - /sandbox
+landlock:
+  compatibility: hard_requirement
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+network_policies:
+  crates_io:
+    name: crates_io
+    endpoints:
+      - { host: index.crates.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+      - { host: static.crates.io, port: 443, protocol: rest, enforcement: enforce, access: read-only }
+    binaries:
+      - { path: "/usr/local/rustup/toolchains/**" }
+      - { path: "/usr/local/share/mise/installs/**" }
+  github:
+    name: github
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/*/*/info/refs", query: { service: git-upload-pack } }
+          - allow: { method: POST, path: "/*/*/git-upload-pack" }
+    binaries:
+      - { path: "/usr/local/rustup/toolchains/**" }
+      - { path: "/usr/local/share/mise/installs/**" }
+      - { path: /usr/bin/git }
+      - { path: "/usr/lib/git-core/**" }
