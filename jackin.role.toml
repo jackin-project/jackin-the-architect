@@ -12,7 +12,6 @@ policy = "policy.yaml"
 enabled = false
 
 [agents.codex]
-model = "gpt-5.1-codex"
 instructions = "instructions/codex.md"
 
 [agents.omp]
