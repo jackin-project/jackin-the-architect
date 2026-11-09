@@ -1,6 +1,6 @@
 # The Architect
 
-The Architect is the jackin role for developing [jackin](https://github.com/jackin-project/jackin) itself. It is a Codex role. It gives Codex the Rust toolchain and the tools that the jackin gates need, in an OpenShell sandbox with a default-deny network policy. Codex is the only agent.
+The Architect is the jackin role for developing [jackin](https://github.com/jackin-project/jackin) itself. It gives the selected D29 agent the Rust toolchain and the tools that the jackin gates need, in an OpenShell sandbox with a default-deny network policy. The manifest maps Codex to `instructions/codex.md` and omp to `instructions/omp.md`.
 
 Jackin builds the image and creates the sandbox. This repository does not publish an image. The role holds no secret.
 
@@ -14,7 +14,7 @@ The `Dockerfile` ends in a stage that starts `FROM construct`. It adds these par
 - The tools of `toolchain/mise.toml`, installed with `mise install --locked` at build time. A sandbox starts the gate without a download.
 - `build-essential`, `cmake`, and `pkg-config` from apt.
 
-Jackin adds Codex and `jackin-start` when it derives the final image (decision D05).
+Jackin adds the selected agent binaries and `jackin-start` when it derives the final image (decision D05).
 
 ### Toolchain
 
@@ -83,7 +83,7 @@ A Renovate pull request for `RUSTUP_VERSION` changes only the version, so the bu
 
 ## Egress policy
 
-`policy.yaml` is a native OpenShell policy that jackin sends without change. The network is deny by default. The role allows two groups of requests. OpenShell adds the rule of the Codex provider, and the policy names no Codex host.
+`policy.yaml` is a native OpenShell policy that jackin sends without change. The network is deny by default. The role allows two groups of requests. OpenShell adds the provider rules for the selected tuples, and the policy names no provider host.
 
 | Rule | Host | Requests |
 |---|---|---|
@@ -102,7 +102,7 @@ The filesystem rules:
 - `/sandbox`, `/tmp`, `/dev/null`, `/dev/shm`, `/dev/ptmx`, and `/dev/pts` are writable.
 - `landlock.compatibility` is `hard_requirement`, so the sandbox fails to start where Landlock is unavailable.
 
-`/dev/ptmx` and `/dev/pts` are writable because the jackin tests and the tool terminals of Codex open pseudo-terminals. A process in the sandbox can open the slave side of another pseudo-terminal that the sandbox owns, read what the other session writes, and inject keystrokes or terminal escape sequences into it. Only sessions of the same sandbox are affected.
+`/dev/ptmx` and `/dev/pts` are writable because the jackin tests and the selected agent's tool terminals open pseudo-terminals. A process in the sandbox can open the slave side of another pseudo-terminal that the sandbox owns, read what the other session writes, and inject keystrokes or terminal escape sequences into it. Only sessions of the same sandbox are affected.
 
 The Docker capability is off (`[docker] enabled = false`).
 
