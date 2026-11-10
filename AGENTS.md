@@ -43,7 +43,7 @@ Keep this section identical in all four repositories. Write the rules for one re
 
 ## This project (jackin-the-architect)
 
-- The Architect is a Codex role for jackin development. Decision D20 in `jackin/rewrite/DESIGN.md` defines it.
+- The Architect is a role for jackin development. Decision D20 in `jackin/rewrite/DESIGN.md` defines it. `jackin.role.toml` registers the Codex and OMP agents of decision D29, and `instructions/codex.md` and `instructions/omp.md` both defer to this file.
 - The final stage of the `Dockerfile` starts `FROM construct`. Jackin builds the image. Do not publish the image from this repository.
 - `toolchain/mise.toml` is the global mise config of the image, and `toolchain/mise.lock` locks it. Keep its `[tools]` table equal to the one in jackin `mise.toml`: copy the table into `toolchain/jackin-pins.toml` and `toolchain/mise.toml` in one commit, then run `mise run lock:toolchain`. `scripts/check-jackin-pins.sh` checks this.
 - The policy permits the crates.io index and download hosts, and the GitHub `info/refs` and `git-upload-pack` paths. It names no Codex host, because OpenShell adds the rule of the Codex provider. Add a host only when the G-FAST gate in a sandbox proves it is needed. Review every widening of the policy as a change to what prompt-injected content can reach.
