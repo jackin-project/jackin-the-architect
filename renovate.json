@@ -49,11 +49,13 @@
       "managerFilePatterns": [
         "/^Dockerfile$/"
       ],
+      "description": "Tracks the rustup version and owns both per-architecture rustup-init checksum ARGs. rustup publishes no release attachments or shasums feed, so the digests are captured and carried unchanged by autoReplaceStringTemplate; the Dockerfile's ADD --checksum is the drift guard (same guarantee as #480's allowlists).",
       "matchStrings": [
-        "ARG RUSTUP_VERSION=(?<currentValue>\\S+)"
+        "ARG RUSTUP_VERSION=(?<currentValue>\\S+)\\nARG RUSTUP_SHA256_ARM64=(?<arm64Sha256>[a-f0-9]{64})\\nARG RUSTUP_SHA256_AMD64=(?<amd64Sha256>[a-f0-9]{64})"
       ],
       "depNameTemplate": "rust-lang/rustup",
-      "datasourceTemplate": "github-tags"
+      "datasourceTemplate": "github-tags",
+      "autoReplaceStringTemplate": "ARG RUSTUP_VERSION={{{newVersion}}}\\nARG RUSTUP_SHA256_ARM64={{{arm64Sha256}}}\\nARG RUSTUP_SHA256_AMD64={{{amd64Sha256}}}"
     }
   ]
 }
