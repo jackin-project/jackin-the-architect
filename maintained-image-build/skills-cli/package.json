@@ -1,0 +1,12 @@
+{
+  "name": "architect-image-node-tools",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "dependencies": {
+    "ctx7": "0.5.11",
+    "skills": "1.5.22"
+  }
+}
