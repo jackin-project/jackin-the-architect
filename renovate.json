@@ -3,47 +3,59 @@
   "extends": [
     "config:best-practices"
   ],
-  "packageRules": [
-    {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["projectjackin/construct"],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-trixie$"
-    }
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 20,
+  "ignorePaths": [
+    ".github/**",
+    "toolchain/mise.toml",
+    ".mise/locks/**",
+    "toolchain/.mise/locks/**"
   ],
+  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>",
+  "customDatasources": {
+    "git-source": {
+      "defaultRegistryUrlTemplate": "https://mirrors.edge.kernel.org/pub/software/scm/git/sha256sums.asc",
+      "format": "plain",
+      "transformTemplates": [
+        "{\"releases\": releases[$contains(version, /^[a-f0-9]{64}\\s+git-\\d+\\.\\d+\\.\\d+\\.tar\\.xz$/)].{\"version\": $match(version, /git-(\\d+\\.\\d+\\.\\d+)\\.tar\\.xz$/).groups[0], \"digest\": $substring(version, 0, 64)}}"
+      ]
+    }
+  },
   "customManagers": [
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG OPENTOFU_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "opentofu/opentofu",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
+      "matchStrings": [
+        "ARG MISE_VERSION=(?<currentValue>\\S+)\\nARG MISE_SHASUMS256=(?<currentDigest>[a-f0-9]{64})\\n"
+      ],
+      "depNameTemplate": "jdx/mise",
+      "datasourceTemplate": "github-release-attachments"
     },
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG HEADROOM_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "pypi",
-      "packageNameTemplate": "headroom-ai"
+      "matchStrings": [
+        "ARG GIT_VERSION=(?<currentValue>\\S+)\\nARG GIT_SHA256=(?<currentDigest>[a-f0-9]{64})\\n"
+      ],
+      "depNameTemplate": "git",
+      "datasourceTemplate": "custom.git-source"
     },
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/(^|/)Dockerfile$/"
+        "/^Dockerfile$/"
       ],
-      "matchStrings": ["ARG RTK_VERSION=(?<currentValue>[\\d.]+)"],
-      "datasourceTemplate": "github-releases",
-      "packageNameTemplate": "rtk-ai/rtk",
-      "extractVersionTemplate": "^v(?<version>.+)$",
-      "versioningTemplate": "semver"
+      "description": "Tracks the rustup version and owns both per-architecture rustup-init checksum ARGs. rustup publishes no release attachments or shasums feed, so the digests are captured and carried unchanged by autoReplaceStringTemplate; the Dockerfile's ADD --checksum is the drift guard (same guarantee as #480's allowlists).",
+      "matchStrings": [
+        "ARG RUSTUP_VERSION=(?<currentValue>\\S+)\\nARG RUSTUP_SHA256_ARM64=(?<arm64Sha256>[a-f0-9]{64})\\nARG RUSTUP_SHA256_AMD64=(?<amd64Sha256>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "rust-lang/rustup",
+      "datasourceTemplate": "github-tags",
+      "autoReplaceStringTemplate": "ARG RUSTUP_VERSION={{{newVersion}}}\\nARG RUSTUP_SHA256_ARM64={{{arm64Sha256}}}\\nARG RUSTUP_SHA256_AMD64={{{amd64Sha256}}}"
     }
-  ],
-  "prHourlyLimit": 0,
-  "prConcurrentLimit": 20,
-  "commitBody": "Signed-off-by: Renovate Bot <renovate@whitesourcesoftware.com>"
+  ]
 }

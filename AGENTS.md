@@ -1,15 +1,52 @@
 # Rules
 
-- No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
-- This is a research project. It is unsafe and expected to contain breaking changes; never treat it as production-ready. Break things when needed and deliver new implementations fast.
-- Always apply these principles:
-  - Judge work by correctness, consistency, and project fit. Never defer a known-wrong state because of ROI, cost, effort, or claims that it is low-value, marginal, or an edge case.
-  - Stop only when the required change is proven impossible with the available tools or model. When uncertain, inspect, test, and measure first.
-  - Before fixing a bug, identify why the architecture permitted it and whether the same structure permits related bugs.
-  - Prefer fixes that remove the enabling condition. Use a symptom-layer patch only when the root fix is proven infeasible or belongs in a separate change, and name the deferred root cause.
-- Delegate first: use subagents for parallel research, implementation, review, and independent verification. Resolve ambiguity autonomously using evidence and project documentation.
-- Commit meaningful, verified changes frequently and push regularly. Prefer one working branch; create another only when safe work requires it. Merge small PRs promptly after all gates pass.
-- Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Use independent subagents to critically verify findings against code, tests, project documentation, and recorded decisions; research uncertainty.
-- For accepted feedback, fix, verify, commit, push, and reply on GitHub with the fixing commit URL before resolving. For rejected feedback, reply with evidence and rationale before resolving. Address general comments in linked PR replies. Never delete feedback or resolve it without a justified disposition.
-- Re-fetch feedback at the final head SHA. Merge only with no unaddressed feedback or unresolved review threads and all required checks and approvals satisfied. Only explicit, PR-specific human authorization permits ignoring identified feedback; general merge approval is not a waiver.
-- Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
+Keep this section identical in all four repositories. Write the rules for one repository under `## This project`.
+
+## Program
+
+- This program rebuilds jackin on NVIDIA OpenShell. The program files are in `jackin/rewrite/` on the branch `feature/openshell-native`. `rewrite/DESIGN.md` is the authority. `rewrite/PLAN.md` lists the tasks and the gates.
+- OpenShell is the only execution engine. Do not run an agent, a sandbox, or a container with Docker, Podman, or Apple `container`.
+- Jackin builds the role images with Docker BuildKit through `docker buildx`. Only the `jackin-image` crate starts `docker`.
+- An agent can run Docker containers in its sandbox only when its role or workspace enables the Docker capability (decision D24). The capability is disabled by default.
+- The agents are the tuples of decision D29 in `rewrite/DESIGN.md`. Do not add code, files, or configuration for an agent outside that catalog.
+- Use the old code only as a reference. To read an old jackin file, run `git show 470fc5d6:<path>` in jackin. Copy old code only when the task states a reason.
+- Do not keep compatibility. Do not write a migration, an importer, a shim, an alias, or a fallback. Make breaking changes.
+- Use the latest stable version of every tool and every dependency. Do not use a prerelease.
+- Run silently. Do not ask a human. If you are not sure, find the facts. Decide. Record the decision in `jackin/rewrite/decisions.tsv`.
+
+## Code
+
+- Do not write comments in code. The only exceptions are SPDX license headers, shebang lines, parser directives such as the Dockerfile `# syntax=` line, and files that a repository generator writes and verifies.
+- Write clap help text with `#[command(about = "...")]` and `#[arg(help = "...")]`. Do not use doc comments for help text.
+- Before you fix a bug, find why the design permitted it. Find whether the same design permits related bugs. Fix the cause. Do not fix only the symptom.
+- Judge work by correctness, consistency, and fit. Do not keep a known-wrong state because of cost or effort.
+
+## Tests
+
+- Delete all old tests. Write new tests only for the behavior that the program builds.
+- Before you write a test, get approval of its plan from an independent reviewer subagent. In the plan, name the behavior, the positive and negative cases, and the reason that no other test covers them.
+- Keep a test only after an independent reviewer subagent sees it fail on broken code and pass on fixed code.
+- Test through public interfaces. Assert the resulting state. Do not assert the sequence of calls.
+- Do not use a fake for code that you own. Use a fake only at an external boundary, behind an interface that you own. The boundaries are the OpenShell gateway, the network, the clock, and the filesystem.
+- Keep tests hermetic and deterministic. Do not use a live network in nextest. Run live tests against a real gateway in `xtask e2e`.
+- Run tests with `cargo nextest` through `mise exec -- mbx`. Never use `cargo test`.
+- If a test is flaky, quarantine it at once. Mark it `#[ignore]` with a tracking reference. Do not weaken, skip, or delete a test to hide broken behavior.
+
+## Work
+
+- Use subagents for research, implementation, review, and verification. Use a different subagent to review the work of each implementer.
+- Verify from the repository root before each commit.
+- Use Conventional Commits. Commit with `git commit -s`. Push after each commit.
+- Work on `feature/openshell-native`, or on a local worktree branch that you merge into it. Do not force-push. Do not merge to `main`. The operator merges the pull requests.
+- Before the operator merges a pull request, read every review, comment, and thread. Fix accepted feedback and reply with the URL of the fix commit. Reply to rejected feedback with the evidence.
+- Keep this file short. Put plans, explanations, and progress in documentation.
+
+## This project (jackin-the-architect)
+
+- The Architect is a role for jackin development. Decision D20 in `jackin/rewrite/DESIGN.md` defines it. `jackin.role.toml` registers the Codex and OMP agents of decision D29, and `instructions/codex.md` and `instructions/omp.md` both defer to this file.
+- The final stage of the `Dockerfile` starts `FROM construct`. Jackin builds the image. Do not publish the image from this repository.
+- `toolchain/mise.toml` is the global mise config of the image, and `toolchain/mise.lock` locks it. Keep its `[tools]` table equal to the one in jackin `mise.toml`: copy the table into `toolchain/jackin-pins.toml` and `toolchain/mise.toml` in one commit, then run `mise run lock:toolchain`. `scripts/check-jackin-pins.sh` checks this.
+- The policy permits the crates.io index and download hosts, and the GitHub `info/refs` and `git-upload-pack` paths. It names no Codex host, because OpenShell adds the rule of the Codex provider. Add a host only when the G-FAST gate in a sandbox proves it is needed. Review every widening of the policy as a change to what prompt-injected content can reach.
+- The gates are `jackin role check .` with the jackin binary from `jackin/target/debug/jackin`, `mise run test`, and the jackin G-FAST gate in a sandbox of this role.
+- `.github/` and `config/fleet/` are generated by `velnor-actions generate`. Do not edit them by hand.
+- Do not put a secret in the role.
