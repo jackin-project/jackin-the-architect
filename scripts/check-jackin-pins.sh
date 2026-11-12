@@ -4,7 +4,7 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-jackin_ref=90acf49722f31c566702c23eea51282beba1cdad
+jackin_ref=d19cce66f548f8c557b765d8e5fd430477a064c4
 jackin_branches="feature/openshell-native main"
 jackin_api=https://api.github.com/repos/jackin-project/jackin
 upstream_url=https://raw.githubusercontent.com/jackin-project/jackin/${jackin_ref}/mise.toml
